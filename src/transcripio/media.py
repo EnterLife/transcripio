@@ -14,10 +14,10 @@ def is_supported_media(path: Path) -> bool:
 
 def ensure_audio_wav(input_path: Path, work_dir: Path, ffmpeg_path: str = "ffmpeg") -> Path:
     if not input_path.exists():
-        raise FileNotFoundError(f"Файл не найден: {input_path}")
+        raise FileNotFoundError(f"File was not found: {input_path}")
 
     if not is_supported_media(input_path):
-        raise ValueError(f"Неподдерживаемый формат файла: {input_path.suffix}")
+        raise ValueError(f"Unsupported file format: {input_path.suffix}")
 
     output_path = work_dir / f"{input_path.stem}.wav"
     command = [
@@ -43,12 +43,12 @@ def ensure_audio_wav(input_path: Path, work_dir: Path, ffmpeg_path: str = "ffmpe
             text=True,
         )
     except FileNotFoundError as exc:
-        raise RuntimeError("ffmpeg не найден. Установите ffmpeg и добавьте его в PATH.") from exc
+        raise RuntimeError("ffmpeg was not found. Install ffmpeg and add it to PATH.") from exc
     except subprocess.CalledProcessError as exc:
         details = exc.stderr.strip() or exc.stdout.strip()
-        raise RuntimeError(f"ffmpeg не смог извлечь аудио: {details}") from exc
+        raise RuntimeError(f"ffmpeg failed to prepare audio: {details}") from exc
 
     if completed.returncode != 0 or not output_path.exists():
-        raise RuntimeError("Не удалось подготовить WAV-аудио.")
+        raise RuntimeError("Could not prepare WAV audio.")
 
     return output_path

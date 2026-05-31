@@ -8,6 +8,7 @@ src/transcripio/formatters.py
 src/transcripio/media.py
 src/transcripio/models.py
 src/transcripio/pipeline.py
+src/transcripio/storage.py
 src/transcripio/transcriber.py
 src/transcripio.egg-info/PKG-INFO
 src/transcripio.egg-info/SOURCES.txt
@@ -15,3 +16,5 @@ src/transcripio.egg-info/dependency_links.txt
 src/transcripio.egg-info/requires.txt
 src/transcripio.egg-info/top_level.txt
 tests/test_diarization.py
+tests/test_formatters.py
+tests/test_storage.py

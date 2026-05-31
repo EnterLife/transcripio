@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Callable
 
 from transcripio.config import AppConfig
 from transcripio.models import TranscriptSegment
+
+SegmentProgressCallback = Callable[[TranscriptSegment, float | None], None]
 
 
 class WhisperTranscriber:
@@ -19,7 +22,7 @@ class WhisperTranscriber:
             from faster_whisper import WhisperModel
         except ImportError as exc:
             raise RuntimeError(
-                "Не установлен faster-whisper. Выполните: pip install -r requirements.txt"
+                "faster-whisper is not installed. Run: pip install -r requirements.txt"
             ) from exc
 
         self._model = WhisperModel(
@@ -29,7 +32,11 @@ class WhisperTranscriber:
         )
         return self._model
 
-    def transcribe(self, audio_path: Path) -> tuple[list[TranscriptSegment], str | None, float | None]:
+    def transcribe(
+        self,
+        audio_path: Path,
+        on_segment: SegmentProgressCallback | None = None,
+    ) -> tuple[list[TranscriptSegment], str | None, float | None]:
         model = self._load_model()
         segments_iter, info = model.transcribe(
             str(audio_path),
@@ -38,10 +45,14 @@ class WhisperTranscriber:
             beam_size=5,
         )
 
-        segments = [
-            TranscriptSegment(start=item.start, end=item.end, text=item.text.strip())
-            for item in segments_iter
-        ]
-        language = getattr(info, "language", self._config.language)
         duration = getattr(info, "duration", None)
+        segments: list[TranscriptSegment] = []
+        for item in segments_iter:
+            segment = TranscriptSegment(start=item.start, end=item.end, text=item.text.strip())
+            segments.append(segment)
+            if on_segment:
+                ratio = min(segment.end / duration, 1.0) if duration else None
+                on_segment(segment, ratio)
+
+        language = getattr(info, "language", self._config.language)
         return segments, language, duration

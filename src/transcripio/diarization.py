@@ -19,17 +19,17 @@ class LocalPyannoteDiarizer:
             return self._pipeline
 
         if not self._config.diarization_model_path:
-            raise RuntimeError("Путь к локальной модели участников не указан.")
+            raise RuntimeError("A local diarization model path was not provided.")
 
         model_path = Path(self._config.diarization_model_path)
         if not model_path.exists():
-            raise FileNotFoundError(f"Локальная модель участников не найдена: {model_path}")
+            raise FileNotFoundError(f"Local diarization model was not found: {model_path}")
 
         try:
             from pyannote.audio import Pipeline
         except ImportError as exc:
             raise RuntimeError(
-                "Для распознавания участников установите зависимости: pip install -r requirements.txt"
+                "Diarization dependencies are missing. Run: pip install -r requirements.txt"
             ) from exc
 
         self._pipeline = Pipeline.from_pretrained(str(model_path))
@@ -41,7 +41,7 @@ class LocalPyannoteDiarizer:
         try:
             import torchaudio
         except ImportError as exc:
-            raise RuntimeError("Для чтения WAV в диаризации нужен torchaudio из requirements.txt") from exc
+            raise RuntimeError("torchaudio from requirements.txt is required for diarization") from exc
 
         waveform, sample_rate = torchaudio.load(str(audio_path))
         annotation = pipeline({"waveform": waveform, "sample_rate": sample_rate})

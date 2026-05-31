@@ -9,6 +9,6 @@ if (-not (Test-Path ".venv")) {
 & ".\.venv\Scripts\python.exe" -m pip install -e . --no-deps
 
 Write-Host ""
-Write-Host "Готово. Для запуска:"
+Write-Host "Done. To launch:"
 Write-Host ".\.venv\Scripts\Activate.ps1"
 Write-Host "streamlit run app.py"
