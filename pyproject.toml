@@ -1,0 +1,19 @@
+[project]
+name = "transcripio"
+version = "0.1.0"
+description = "Local audio/video transcription UI with optional local speaker diarization."
+requires-python = ">=3.10"
+dependencies = [
+    "streamlit>=1.35",
+    "faster-whisper>=1.0",
+    "pyannote.audio>=3.1",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
