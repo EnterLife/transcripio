@@ -1,4 +1,11 @@
-from transcripio.diarization import assign_speakers
+from pathlib import Path
+import sys
+import types
+
+import torch
+
+from transcripio.config import AppConfig
+from transcripio.diarization import LocalPyannoteDiarizer, assign_speakers
 from transcripio.models import DiarizationSegment, TranscriptSegment
 
 
@@ -12,3 +19,57 @@ def test_assign_speakers_uses_largest_overlap() -> None:
     result = assign_speakers(transcript, diarization)
 
     assert result[0].speaker == "SPEAKER_01"
+
+
+def test_diarizer_passes_preloaded_waveform_to_pipeline(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("pipeline: pyannote", encoding="utf-8")
+    audio_path = tmp_path / "audio.wav"
+    audio_path.write_bytes(b"wav")
+
+    received_file = {}
+
+    class FakeTurn:
+        start = 0.0
+        end = 1.0
+
+    class FakeAnnotation:
+        def itertracks(self, yield_label: bool = False):
+            assert yield_label is True
+            yield FakeTurn(), None, "SPEAKER_00"
+
+    class FakePipeline:
+        def __call__(self, file):
+            received_file.update(file)
+            return FakeAnnotation()
+
+    fake_pipeline = FakePipeline()
+
+    class FakePipelineFactory:
+        @staticmethod
+        def from_pretrained(_path: str):
+            return fake_pipeline
+
+    monkeypatch.setitem(
+        sys.modules,
+        "pyannote.audio",
+        types.SimpleNamespace(Pipeline=FakePipelineFactory),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "torchaudio",
+        types.SimpleNamespace(load=lambda _path: (torch.ones(2, 16000), 16000)),
+    )
+
+    diarizer = LocalPyannoteDiarizer(AppConfig(diarization_model_path=str(config_path)))
+
+    segments = diarizer.diarize(audio_path)
+
+    assert segments == [DiarizationSegment(start=0.0, end=1.0, speaker="SPEAKER_00")]
+    assert set(received_file) == {"waveform", "sample_rate", "uri"}
+    assert received_file["waveform"].shape == (1, 16000)
+    assert received_file["sample_rate"] == 16000
+    assert received_file["uri"] == "audio"
