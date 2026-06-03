@@ -14,11 +14,13 @@ class AppConfig:
     whisper_model: str = "small"
     device: str = "cpu"
     compute_type: str = "int8"
-    language: str | None = "en"
+    language: str | None = None
     diarization_model_path: str | None = None
     ffmpeg_path: str = "ffmpeg"
     output_dir: Path = Path("data/output")
     history_dir: Path = Path("data/history")
+    local_files_only: bool = False
+    allow_cpu_fallback: bool = True
 
 
 @dataclass(slots=True)
@@ -39,6 +41,15 @@ class AppSettings:
         "avi",
         "webm",
         "m4v",
+    )
+    whisper_models: tuple[str, ...] = (
+        "tiny",
+        "base",
+        "small",
+        "medium",
+        "large-v3",
+        "Systran/faster-whisper-small",
+        "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
     )
     config: AppConfig = field(default_factory=AppConfig)
 
@@ -82,6 +93,14 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
         ffmpeg_path=_text(transcription_settings.get("ffmpeg_path"), default_config.ffmpeg_path),
         output_dir=Path(_text(storage_settings.get("output_dir"), str(default_config.output_dir))),
         history_dir=Path(_text(storage_settings.get("history_dir"), str(default_config.history_dir))),
+        local_files_only=_bool(
+            transcription_settings.get("local_files_only"),
+            default_config.local_files_only,
+        ),
+        allow_cpu_fallback=_bool(
+            transcription_settings.get("allow_cpu_fallback"),
+            default_config.allow_cpu_fallback,
+        ),
     )
 
     defaults = AppSettings()
@@ -90,6 +109,10 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
         page_icon=_text(ui_settings.get("page_icon"), defaults.page_icon),
         caption=_text(ui_settings.get("caption"), defaults.caption),
         upload_types=_upload_types(ui_settings.get("upload_types"), defaults.upload_types),
+        whisper_models=_text_list(
+            transcription_settings.get("whisper_models"),
+            defaults.whisper_models,
+        ),
         config=config,
     )
 
@@ -114,6 +137,20 @@ def _optional_text(value: Any, default: str | None) -> str | None:
     return text or None
 
 
+def _bool(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return bool(value)
+
+
 def _upload_types(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:
     if value is None:
         return default
@@ -124,3 +161,13 @@ def _upload_types(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:
         str(item).strip().lower().lstrip(".") for item in value if str(item).strip()
     )
     return upload_types or default
+
+
+def _text_list(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:
+    if value is None:
+        return default
+    if not isinstance(value, list):
+        raise SettingsError("Settings value must be a list of text values.")
+
+    text_values = tuple(str(item).strip() for item in value if str(item).strip())
+    return text_values or default

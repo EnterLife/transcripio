@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
+import os
 from collections.abc import Callable
+from pathlib import Path
 
 from transcripio.config import AppConfig
 from transcripio.models import TranscriptSegment
@@ -13,6 +14,7 @@ class WhisperTranscriber:
     def __init__(self, config: AppConfig) -> None:
         self._config = config
         self._model = None
+        self.runtime_notice: str | None = None
 
     def _load_model(self):
         if self._model is not None:
@@ -25,12 +27,37 @@ class WhisperTranscriber:
                 "faster-whisper is not installed. Run: pip install -r requirements.txt"
             ) from exc
 
-        self._model = WhisperModel(
-            self._config.whisper_model,
-            device=self._config.device,
-            compute_type=self._config.compute_type,
-        )
+        try:
+            self._model = self._create_model(
+                WhisperModel,
+                device=self._config.device,
+                compute_type=self._config.compute_type,
+            )
+        except Exception as exc:
+            if not self._should_fallback_to_cpu(exc):
+                raise
+            self.runtime_notice = (
+                "CUDA libraries are not available, so transcription is running on CPU with int8."
+            )
+            self._model = self._create_model(WhisperModel, device="cpu", compute_type="int8")
         return self._model
+
+    def _create_model(self, model_class, device: str, compute_type: str):
+        return model_class(
+            self._config.whisper_model,
+            device=device,
+            compute_type=compute_type,
+            local_files_only=self._config.local_files_only,
+            use_auth_token=os.environ.get("HF_TOKEN") or None,
+        )
+
+    def _should_fallback_to_cpu(self, exc: Exception) -> bool:
+        if not self._config.allow_cpu_fallback or self._config.device != "cuda":
+            return False
+
+        message = str(exc).lower()
+        cuda_markers = ("cuda", "cublas", "cudnn", "nvidia")
+        return any(marker in message for marker in cuda_markers)
 
     def transcribe(
         self,

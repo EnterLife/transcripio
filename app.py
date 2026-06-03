@@ -15,6 +15,7 @@ if str(SRC_DIR) not in sys.path:
 
 from transcripio.config import AppConfig, load_settings
 from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt
+from transcripio.model_catalog import WhisperModelOption, list_whisper_model_options
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio.pipeline import TranscriptionPipeline
 from transcripio.storage import list_history, load_result, save_result
@@ -91,6 +92,16 @@ def _selected_index(options: list[str], value: str, default: int = 0) -> int:
         return default
 
 
+def _selected_model_option(
+    options: list[WhisperModelOption],
+    configured_model: str,
+) -> WhisperModelOption | None:
+    for option in options:
+        if option.value == configured_model:
+            return option
+    return options[0] if options else None
+
+
 def _has_streamlit_context() -> bool:
     try:
         from streamlit.runtime.scriptrunner import get_script_run_ctx
@@ -111,6 +122,7 @@ def _launch_with_streamlit() -> NoReturn:
 def main() -> None:
     settings = load_settings()
     default_config = settings.config
+    model_options = list_whisper_model_options(settings.whisper_models)
 
     st.set_page_config(page_title=settings.page_title, page_icon=settings.page_icon, layout="wide")
 
@@ -122,17 +134,49 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Models")
-        model_name_or_path = st.text_input(
-            "Whisper model name or local path",
-            value=default_config.whisper_model,
-            help="Use tiny/base/small/medium/large-v3 or a local CTranslate2 model directory.",
+        selected_default = _selected_model_option(model_options, default_config.whisper_model)
+        model_labels = [option.label for option in model_options] + ["Custom name or path"]
+        selected_model_label = st.selectbox(
+            "Whisper model",
+            options=model_labels,
+            index=model_options.index(selected_default) if selected_default else 0,
         )
+        if selected_model_label == "Custom name or path":
+            selected_model_option = None
+            model_name_or_path = st.text_input(
+                "Model name or local path",
+                value=default_config.whisper_model,
+                help="Use a faster-whisper model name, HF repo ID, or local CTranslate2 directory.",
+            )
+        else:
+            selected_model_option = model_options[model_labels.index(selected_model_label)]
+            model_name_or_path = selected_model_option.value
+
+        if selected_model_option:
+            if selected_model_option.is_downloaded:
+                st.caption("This model is available locally.")
+            else:
+                st.caption("This model can be downloaded by faster-whisper on first use.")
+
+        local_files_default = default_config.local_files_only
+        if selected_model_option and selected_model_option.is_downloaded:
+            local_files_default = True
+        local_files_only = st.checkbox(
+            "Use downloaded/local files only",
+            value=local_files_default,
+            help="Avoids Hugging Face downloads and token warnings when the selected model is already local.",
+        )
+
         device_options = ["cpu", "cuda"]
         device = st.selectbox(
             "Device",
             options=device_options,
             index=_selected_index(device_options, default_config.device),
         )
+        if device == "cuda":
+            st.warning(
+                "CUDA needs NVIDIA CUDA/cuBLAS DLLs. If they are missing, Transcripio will fall back to CPU."
+            )
         compute_type_options = ["int8", "float16", "float32"]
         compute_type = st.selectbox(
             "Compute type",
@@ -145,15 +189,24 @@ def main() -> None:
             value=default_config.language or "",
             help="Leave empty for auto-detection.",
         )
-        diarization_model_path = st.text_input(
-            "Local diarization pipeline path",
-            value=default_config.diarization_model_path or "",
-            help="Example: models/pyannote-speaker-diarization/config.yaml",
+        use_diarization = st.checkbox(
+            "Assign speakers",
+            value=bool(default_config.diarization_model_path),
+            help="Keep this off for the fastest first transcription.",
         )
+        if use_diarization:
+            diarization_model_path = st.text_input(
+                "Local diarization pipeline path",
+                value=default_config.diarization_model_path or "",
+                help="Example: models/pyannote-speaker-diarization/config.yaml",
+            )
+        else:
+            diarization_model_path = ""
         st.divider()
-        st.caption(
-            "Everything runs locally. Network access is only needed if a model name has to be downloaded."
-        )
+        if os.environ.get("HF_TOKEN"):
+            st.caption("HF_TOKEN is set for authenticated Hugging Face downloads.")
+        else:
+            st.caption("HF_TOKEN is not set. Downloaded/local models do not need it.")
 
     uploaded_files = st.file_uploader(
         "Add audio or video files",
@@ -192,6 +245,8 @@ def main() -> None:
                 ffmpeg_path=default_config.ffmpeg_path,
                 output_dir=default_config.output_dir,
                 history_dir=default_config.history_dir,
+                local_files_only=local_files_only,
+                allow_cpu_fallback=default_config.allow_cpu_fallback,
             )
             pipeline = TranscriptionPipeline(config)
             overall_progress = st.progress(0, text="Starting queue")

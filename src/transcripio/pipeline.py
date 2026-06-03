@@ -43,6 +43,8 @@ class TranscriptionPipeline:
                 audio_path,
                 on_segment=on_segment,
             )
+            if self._transcriber.runtime_notice:
+                notify(self._transcriber.runtime_notice, 0.72)
 
             if self._diarizer.is_enabled():
                 notify("Assigning speakers with the local diarization model", 0.75)

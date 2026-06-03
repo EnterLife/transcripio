@@ -20,11 +20,22 @@
   },
   "transcription": {
     "whisper_model": "small",
+    "whisper_models": [
+      "tiny",
+      "base",
+      "small",
+      "medium",
+      "large-v3",
+      "Systran/faster-whisper-small",
+      "mobiuslabsgmbh/faster-whisper-large-v3-turbo"
+    ],
     "device": "cpu",
     "compute_type": "int8",
-    "language": "en",
+    "language": "",
     "diarization_model_path": "",
-    "ffmpeg_path": "ffmpeg"
+    "ffmpeg_path": "ffmpeg",
+    "local_files_only": false,
+    "allow_cpu_fallback": true
   },
   "storage": {
     "output_dir": "data/output",

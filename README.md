@@ -55,6 +55,7 @@ The default setup uses CPU-friendly settings:
 - Device: `cpu`
 - Compute type: `int8`
 - Whisper model: `small`
+- Language: auto-detect
 
 ## Install ffmpeg
 
@@ -123,14 +124,15 @@ Streamlit automatically.
 2. In the sidebar, choose the Whisper model:
    - Use a model name such as `tiny`, `base`, `small`, `medium`, or `large-v3`.
    - Or use a local CTranslate2 model path such as `models/whisper-large-v3-ct2`.
+   - Models marked `downloaded` are already present in the Hugging Face cache or `models/`.
 3. Choose the device:
-   - `cpu` works everywhere.
+   - `cpu` works everywhere and is the safest first run.
    - `cuda` requires a correctly installed GPU PyTorch stack.
 4. Choose the compute type:
    - `int8` is a good CPU default.
    - `float16` is commonly used on GPU.
 5. Set the language code, for example `en` or `ru`. Leave it empty for auto-detection.
-6. Optionally provide a local pyannote `config.yaml` path for speaker diarization.
+6. Keep **Assign speakers** off for the fastest first transcription.
 7. Upload one or more audio/video files.
 8. Click **Process queue**.
 9. Edit speaker labels or transcript text in the segment table.
@@ -170,6 +172,9 @@ small
 
 This is convenient, but the first run may download model files into the local Hugging Face
 cache if they are not already present.
+
+The sidebar marks cached models as `downloaded`. If a model is already downloaded, keep
+**Use downloaded/local files only** enabled to avoid Hugging Face download checks.
 
 Using a local model path:
 
@@ -280,6 +285,13 @@ If CUDA fails, switch the app sidebar back to:
 Device: cpu
 Compute type: int8
 ```
+
+If you see `Library cublas64_12.dll is not found or cannot be loaded`, CUDA runtime
+DLLs are missing. Transcripio falls back to CPU when it can, but CPU/int8 is the
+recommended first transcription setting.
+
+If you see a Hugging Face unauthenticated request warning, either use a model marked
+`downloaded`, enable **Use downloaded/local files only**, or set `HF_TOKEN` before launch.
 
 If pyannote cannot load the diarization pipeline, confirm that:
 
