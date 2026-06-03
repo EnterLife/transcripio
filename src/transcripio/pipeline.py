@@ -48,8 +48,12 @@ class TranscriptionPipeline:
 
             if self._diarizer.is_enabled():
                 notify("Assigning speakers with the local diarization model", 0.75)
-                diarization_segments = self._diarizer.diarize(audio_path)
-                transcript_segments = assign_speakers(transcript_segments, diarization_segments)
+                try:
+                    diarization_segments = self._diarizer.diarize(audio_path)
+                except Exception as exc:  # noqa: BLE001 - keep the transcript even if speakers fail.
+                    notify(f"Speaker assignment skipped: {_clean_pipeline_error(exc)}", 0.82)
+                else:
+                    transcript_segments = assign_speakers(transcript_segments, diarization_segments)
 
             notify("Writing result artifacts", 0.95)
             self._config.output_dir.mkdir(parents=True, exist_ok=True)
@@ -69,3 +73,13 @@ class TranscriptionPipeline:
             )
             notify("Done", 1.0)
             return result
+
+
+def _clean_pipeline_error(exc: Exception) -> str:
+    message = str(exc).strip().splitlines()[0]
+    if "torchcodec" in message.lower() or "libtorchcodec" in message.lower():
+        return (
+            "pyannote could not use TorchCodec on this Windows environment. "
+            "Transcript was saved without speaker labels."
+        )
+    return message

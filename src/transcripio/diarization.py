@@ -30,7 +30,10 @@ class LocalPyannoteDiarizer:
         os.environ.setdefault("PYANNOTE_METRICS_ENABLED", "false")
         try:
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", message=".*torchcodec is not installed correctly.*")
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r"\s*torchcodec is not installed correctly.*",
+                )
                 from pyannote.audio import Pipeline
                 self._pipeline = Pipeline.from_pretrained(str(model_path))
         except ImportError as exc:
@@ -54,9 +57,7 @@ class LocalPyannoteDiarizer:
         except Exception as exc:
             if _is_torchcodec_error(exc):
                 raise RuntimeError(
-                    "Diarization failed because pyannote tried to use TorchCodec audio decoding. "
-                    "Transcripio now passes preloaded audio to avoid TorchCodec; restart the app and "
-                    "try again. If it still fails, use the Community-1 diarization model."
+                    "pyannote could not use TorchCodec on this Windows environment."
                 ) from exc
             raise
 
