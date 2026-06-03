@@ -1,0 +1,33 @@
+{
+  "ui": {
+    "page_title": "Transcripio",
+    "page_icon": "T",
+    "caption": "Local audio and video transcription with optional local speaker diarization.",
+    "upload_types": [
+      "mp3",
+      "wav",
+      "m4a",
+      "flac",
+      "ogg",
+      "aac",
+      "mp4",
+      "mov",
+      "mkv",
+      "avi",
+      "webm",
+      "m4v"
+    ]
+  },
+  "transcription": {
+    "whisper_model": "small",
+    "device": "cpu",
+    "compute_type": "int8",
+    "language": "en",
+    "diarization_model_path": "",
+    "ffmpeg_path": "ffmpeg"
+  },
+  "storage": {
+    "output_dir": "data/output",
+    "history_dir": "data/history"
+  }
+}

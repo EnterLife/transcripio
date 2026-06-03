@@ -24,7 +24,9 @@ and exports editable results as TXT, SRT, VTT, DOCX, and JSON.
 transcripio/
   app.py                         Streamlit UI
   requirements.txt               single dependency list
-  setup.ps1                      Windows setup script for .venv
+  settings.json                  default app settings
+  setup.bat                      Windows setup script for .venv
+  run.bat                        Windows app launcher
   scripts/prepare_pyannote.py    helper for downloading a local pyannote pipeline
   src/transcripio/
     config.py                    app configuration
@@ -42,7 +44,7 @@ transcripio/
 
 ## Requirements
 
-- Windows PowerShell.
+- Windows Command Prompt or PowerShell.
 - Python 3.10 or newer.
 - `ffmpeg` available from the command line.
 - Enough disk space for ML dependencies and local models.
@@ -72,7 +74,7 @@ the check again.
 From the repository root:
 
 ```powershell
-.\setup.ps1
+.\setup.bat
 ```
 
 The script does all of this:
@@ -85,8 +87,7 @@ The script does all of this:
 Then launch the app:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-streamlit run app.py
+.\run.bat
 ```
 
 Open the local URL printed by Streamlit, usually:
@@ -97,7 +98,7 @@ http://localhost:8501
 
 ## Manual Setup
 
-Use these commands if you do not want to run `setup.ps1`:
+Use these commands if you do not want to run `setup.bat`:
 
 ```powershell
 python -m venv .venv
@@ -110,12 +111,15 @@ python -m pip install -e . --no-deps
 Run the app:
 
 ```powershell
-streamlit run app.py
+.\.venv\Scripts\python.exe -m streamlit run app.py
 ```
+
+You can also run `python app.py`; the app redirects that direct Python launch into
+Streamlit automatically.
 
 ## Using the App
 
-1. Open the app with `streamlit run app.py`.
+1. Open the app with `run.bat`.
 2. In the sidebar, choose the Whisper model:
    - Use a model name such as `tiny`, `base`, `small`, `medium`, or `large-v3`.
    - Or use a local CTranslate2 model path such as `models/whisper-large-v3-ct2`.
@@ -213,7 +217,7 @@ again. Keep the `models/` directory local and do not commit it.
 
 For fully offline transcription:
 
-1. Install dependencies while online with `.\setup.ps1`.
+1. Install dependencies while online with `.\setup.bat`.
 2. Install `ffmpeg`.
 3. Download or prepare a local CTranslate2 Whisper model.
 4. Optional: download a local pyannote diarization pipeline.
@@ -234,6 +238,11 @@ data/history/  transcript JSON files
 
 These directories are ignored by git. The History tab reads saved JSON files from
 `data/history/` and lets you reopen, edit, and re-export transcripts.
+
+## Settings
+
+Default UI, model, ffmpeg, and storage settings live in `settings.json`.
+The sidebar still lets you override model settings for the current run.
 
 ## Running Checks
 
@@ -262,13 +271,6 @@ ffmpeg -version
 ```
 
 ## Troubleshooting
-
-If PowerShell blocks `setup.ps1`, run:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\setup.ps1
-```
 
 If `ffmpeg` is not found, install it and open a new PowerShell window so `PATH` is refreshed.
 
