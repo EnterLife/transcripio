@@ -221,11 +221,16 @@ rename those labels to real names for export.
 To use diarization locally:
 
 1. Create a Hugging Face account.
-2. Accept the terms for the pyannote diarization repository you want to use.
+2. Accept the terms for the selected diarization repository:
+   - Recommended: `pyannote/speaker-diarization-community-1`
+   - Legacy 3.1 additionally requires `pyannote/segmentation-3.0`
 3. Create a Hugging Face access token.
+   - If the token is fine-grained, grant read access to the required pyannote repositories
+     or to public gated repositories you can access.
 4. In the app sidebar, enable **Assign speakers**.
 5. Open **Download diarization model**.
-6. Paste the token into **HF token** and click **Download speaker model**.
+6. Paste the token into **HF token** and click **Check HF access**.
+7. If both repositories show access granted, click **Download speaker model**.
 
 The token is used for that download only and is not saved to `settings.json`.
 

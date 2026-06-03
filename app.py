@@ -19,7 +19,12 @@ from transcripio.cuda_runtime import (
     configure_cuda_dll_paths,
     install_cuda_runtime_packages,
 )
-from transcripio.diarization_setup import download_diarization_pipeline
+from transcripio.diarization_setup import (
+    DIARIZATION_REPO_OPTIONS,
+    check_huggingface_diarization_access,
+    download_diarization_pipeline,
+    required_access_repos,
+)
 from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt
 from transcripio.model_catalog import (
     WhisperModelOption,
@@ -120,16 +125,41 @@ def _show_result_editor(result: TranscriptionResult, history_dir: Path, editor_k
     docx = to_docx(result)
 
     col1, col2, col3, col4, col5 = st.columns(5)
-    col1.download_button("TXT", txt, file_name=f"{base_name}.txt", mime="text/plain")
-    col2.download_button("SRT", srt, file_name=f"{base_name}.srt", mime="application/x-subrip")
-    col3.download_button("VTT", vtt, file_name=f"{base_name}.vtt", mime="text/vtt")
+    col1.download_button(
+        "TXT",
+        txt,
+        file_name=f"{base_name}.txt",
+        mime="text/plain",
+        key=f"{editor_key_prefix}-download-txt-{result.job_id}",
+    )
+    col2.download_button(
+        "SRT",
+        srt,
+        file_name=f"{base_name}.srt",
+        mime="application/x-subrip",
+        key=f"{editor_key_prefix}-download-srt-{result.job_id}",
+    )
+    col3.download_button(
+        "VTT",
+        vtt,
+        file_name=f"{base_name}.vtt",
+        mime="text/vtt",
+        key=f"{editor_key_prefix}-download-vtt-{result.job_id}",
+    )
     col4.download_button(
         "DOCX",
         docx,
         file_name=f"{base_name}.docx",
         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        key=f"{editor_key_prefix}-download-docx-{result.job_id}",
     )
-    col5.download_button("JSON", json_text, file_name=f"{base_name}.json", mime="application/json")
+    col5.download_button(
+        "JSON",
+        json_text,
+        file_name=f"{base_name}.json",
+        mime="application/json",
+        key=f"{editor_key_prefix}-download-json-{result.job_id}",
+    )
 
 
 def _speaker_name_overrides(
@@ -357,10 +387,27 @@ def main() -> None:
                 st.caption(
                     "Accept the pyannote model terms on Hugging Face first. The token is used only for this download."
                 )
-                diarization_repo_id = st.text_input(
+                selected_diarization_repo = st.selectbox(
                     "Hugging Face repo",
-                    value=default_config.diarization_repo_id,
-                    help="Default: pyannote/speaker-diarization-3.1",
+                    options=list(DIARIZATION_REPO_OPTIONS) + ["Custom repo"],
+                    index=_selected_index(
+                        list(DIARIZATION_REPO_OPTIONS) + ["Custom repo"],
+                        default_config.diarization_repo_id,
+                    ),
+                )
+                if selected_diarization_repo == "Custom repo":
+                    diarization_repo_id = st.text_input(
+                        "Custom Hugging Face repo",
+                        value=default_config.diarization_repo_id,
+                    )
+                else:
+                    diarization_repo_id = selected_diarization_repo
+
+                st.markdown(
+                    "\n".join(
+                        f"- Accept access for [{repo_id}](https://huggingface.co/{repo_id})"
+                        for repo_id in required_access_repos(diarization_repo_id)
+                    )
                 )
                 diarization_output_dir = st.text_input(
                     "Save to",
@@ -373,6 +420,23 @@ def main() -> None:
                     type="password",
                     help="Create this on Hugging Face after accepting pyannote model terms.",
                 )
+                if st.button("Check HF access", width="stretch"):
+                    try:
+                        with st.spinner("Checking Hugging Face access"):
+                            access_check = check_huggingface_diarization_access(
+                                token=hf_token,
+                                repo_id=diarization_repo_id,
+                            )
+                    except Exception as exc:  # noqa: BLE001 - Streamlit should show a clean error.
+                        st.error(str(exc))
+                    else:
+                        if access_check.username:
+                            st.caption(f"Token account: {access_check.username}")
+                        for repo_access in access_check.repos:
+                            if repo_access.has_access:
+                                st.success(f"{repo_access.repo_id}: access granted")
+                            else:
+                                st.error(f"{repo_access.repo_id}: {repo_access.message}")
                 if st.button("Download speaker model", width="stretch"):
                     try:
                         with st.spinner("Downloading local diarization pipeline"):
