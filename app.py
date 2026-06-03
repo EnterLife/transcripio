@@ -14,11 +14,46 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from transcripio.config import AppConfig, load_settings
+from transcripio.cuda_runtime import (
+    CUDA_RUNTIME_PACKAGES,
+    configure_cuda_dll_paths,
+    install_cuda_runtime_packages,
+)
 from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt
 from transcripio.model_catalog import WhisperModelOption, list_whisper_model_options
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio.pipeline import TranscriptionPipeline
 from transcripio.storage import list_history, load_result, save_result
+
+
+def _inject_status_spinner_css() -> None:
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stStatusWidgetRunningIcon"] svg {
+            display: none;
+        }
+
+        div[data-testid="stStatusWidgetRunningIcon"]::before {
+            content: "";
+            display: block;
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 2px solid rgba(250, 250, 250, 0.24);
+            border-top-color: rgba(250, 250, 250, 0.82);
+            border-radius: 50%;
+            animation: transcripio-status-spin 0.8s linear infinite;
+        }
+
+        @keyframes transcripio-status-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _show_result_editor(result: TranscriptionResult, history_dir: Path) -> None:
@@ -125,6 +160,7 @@ def main() -> None:
     model_options = list_whisper_model_options(settings.whisper_models)
 
     st.set_page_config(page_title=settings.page_title, page_icon=settings.page_icon, layout="wide")
+    _inject_status_spinner_css()
 
     st.title(settings.page_title)
     st.caption(settings.caption)
@@ -174,9 +210,34 @@ def main() -> None:
             index=_selected_index(device_options, default_config.device),
         )
         if device == "cuda":
+            cuda_status = configure_cuda_dll_paths()
             st.warning(
                 "CUDA needs NVIDIA CUDA/cuBLAS DLLs. If they are missing, Transcripio will fall back to CPU."
             )
+            if cuda_status.is_ready:
+                st.caption("CUDA runtime DLLs were found.")
+            else:
+                st.caption(f"Missing CUDA DLLs: {', '.join(cuda_status.missing_dlls)}")
+                with st.expander("Install official CUDA runtime packages"):
+                    st.caption(
+                        "Installs via pip: " + ", ".join(CUDA_RUNTIME_PACKAGES)
+                    )
+                    if st.button("Install GPU runtime", use_container_width=True):
+                        with st.spinner("Installing NVIDIA CUDA runtime packages"):
+                            completed = install_cuda_runtime_packages()
+                        if completed.returncode == 0:
+                            configure_cuda_dll_paths()
+                            st.success("GPU runtime packages installed. Try processing again.")
+                        else:
+                            details = completed.stderr.strip() or completed.stdout.strip()
+                            st.error(f"Could not install GPU runtime packages: {details}")
+            auto_install_cuda_runtime = st.checkbox(
+                "Auto-install missing GPU runtime before transcription",
+                value=default_config.auto_install_cuda_runtime,
+                help="Downloads official NVIDIA pip packages only when CUDA is selected and DLLs are missing.",
+            )
+        else:
+            auto_install_cuda_runtime = False
         compute_type_options = ["int8", "float16", "float32"]
         compute_type = st.selectbox(
             "Compute type",
@@ -247,6 +308,7 @@ def main() -> None:
                 history_dir=default_config.history_dir,
                 local_files_only=local_files_only,
                 allow_cpu_fallback=default_config.allow_cpu_fallback,
+                auto_install_cuda_runtime=auto_install_cuda_runtime,
             )
             pipeline = TranscriptionPipeline(config)
             overall_progress = st.progress(0, text="Starting queue")

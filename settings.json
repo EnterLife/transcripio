@@ -35,7 +35,8 @@
     "diarization_model_path": "",
     "ffmpeg_path": "ffmpeg",
     "local_files_only": false,
-    "allow_cpu_fallback": true
+    "allow_cpu_fallback": true,
+    "auto_install_cuda_runtime": true
   },
   "storage": {
     "output_dir": "data/output",

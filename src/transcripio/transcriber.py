@@ -5,6 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from transcripio.config import AppConfig
+from transcripio.cuda_runtime import configure_cuda_dll_paths, install_cuda_runtime_packages
 from transcripio.models import TranscriptSegment
 
 SegmentProgressCallback = Callable[[TranscriptSegment, float | None], None]
@@ -43,6 +44,17 @@ class WhisperTranscriber:
         return self._model
 
     def _create_model(self, model_class, device: str, compute_type: str):
+        if device == "cuda":
+            cuda_status = configure_cuda_dll_paths()
+            if not cuda_status.is_ready and self._config.auto_install_cuda_runtime:
+                completed = install_cuda_runtime_packages()
+                if completed.returncode != 0:
+                    details = completed.stderr.strip() or completed.stdout.strip()
+                    raise RuntimeError(f"Could not install CUDA runtime packages: {details}")
+                cuda_status = configure_cuda_dll_paths()
+            if not cuda_status.is_ready:
+                missing = ", ".join(cuda_status.missing_dlls)
+                raise RuntimeError(f"Missing CUDA runtime DLLs: {missing}")
         return model_class(
             self._config.whisper_model,
             device=device,

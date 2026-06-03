@@ -27,6 +27,7 @@ transcripio/
   settings.json                  default app settings
   setup.bat                      Windows setup script for .venv
   run.bat                        Windows app launcher
+  install_gpu_runtime.bat        optional NVIDIA CUDA runtime installer
   scripts/prepare_pyannote.py    helper for downloading a local pyannote pipeline
   src/transcripio/
     config.py                    app configuration
@@ -289,6 +290,23 @@ Compute type: int8
 If you see `Library cublas64_12.dll is not found or cannot be loaded`, CUDA runtime
 DLLs are missing. Transcripio falls back to CPU when it can, but CPU/int8 is the
 recommended first transcription setting.
+
+To use GPU mode, open the CUDA install panel in the sidebar or run:
+
+```powershell
+.\install_gpu_runtime.bat
+```
+
+This installs official NVIDIA Python packages into `.venv`:
+
+```text
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*
+```
+
+Transcripio automatically adds their DLL directories before loading the Whisper model.
+If **Auto-install missing GPU runtime before transcription** is enabled, this install
+happens automatically the first time a CUDA transcription needs those DLLs.
 
 If you see a Hugging Face unauthenticated request warning, either use a model marked
 `downloaded`, enable **Use downloaded/local files only**, or set `HF_TOKEN` before launch.

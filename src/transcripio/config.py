@@ -21,6 +21,7 @@ class AppConfig:
     history_dir: Path = Path("data/history")
     local_files_only: bool = False
     allow_cpu_fallback: bool = True
+    auto_install_cuda_runtime: bool = True
 
 
 @dataclass(slots=True)
@@ -100,6 +101,10 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
         allow_cpu_fallback=_bool(
             transcription_settings.get("allow_cpu_fallback"),
             default_config.allow_cpu_fallback,
+        ),
+        auto_install_cuda_runtime=_bool(
+            transcription_settings.get("auto_install_cuda_runtime"),
+            default_config.auto_install_cuda_runtime,
         ),
     )
 
