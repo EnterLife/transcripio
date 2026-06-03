@@ -20,7 +20,11 @@ from transcripio.cuda_runtime import (
     install_cuda_runtime_packages,
 )
 from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt
-from transcripio.model_catalog import WhisperModelOption, list_whisper_model_options
+from transcripio.model_catalog import (
+    WhisperModelOption,
+    list_diarization_model_options,
+    list_whisper_model_options,
+)
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio.pipeline import TranscriptionPipeline
 from transcripio.storage import list_history, load_result, save_result
@@ -63,11 +67,13 @@ def _show_result_editor(result: TranscriptionResult, history_dir: Path, editor_k
     else:
         st.caption(f"Language: {result.language or 'unknown'}")
 
+    speaker_names = _speaker_name_overrides(result, editor_key_prefix)
+
     rows = [
         {
             "start": round(segment.start, 3),
             "end": round(segment.end, 3),
-            "speaker": segment.speaker or "",
+            "speaker": speaker_names.get(segment.speaker or "", segment.speaker or ""),
             "text": segment.text,
         }
         for segment in result.segments
@@ -120,6 +126,28 @@ def _show_result_editor(result: TranscriptionResult, history_dir: Path, editor_k
     col5.download_button("JSON", json_text, file_name=f"{base_name}.json", mime="application/json")
 
 
+def _speaker_name_overrides(
+    result: TranscriptionResult,
+    editor_key_prefix: str,
+) -> dict[str, str]:
+    speaker_labels = sorted({segment.speaker for segment in result.segments if segment.speaker})
+    if not speaker_labels:
+        return {}
+
+    with st.expander("Speaker names"):
+        overrides: dict[str, str] = {}
+        for label in speaker_labels:
+            name = st.text_input(
+                label,
+                value="",
+                key=f"{editor_key_prefix}-speaker-name-{result.job_id}-{label}",
+                placeholder=f"Name for {label}",
+            ).strip()
+            if name:
+                overrides[label] = name
+        return overrides
+
+
 def _selected_index(options: list[str], value: str, default: int = 0) -> int:
     try:
         return options.index(value)
@@ -158,6 +186,7 @@ def main() -> None:
     settings = load_settings()
     default_config = settings.config
     model_options = list_whisper_model_options(settings.whisper_models)
+    diarization_options = list_diarization_model_options()
 
     st.set_page_config(page_title=settings.page_title, page_icon=settings.page_icon, layout="wide")
     _inject_status_spinner_css()
@@ -318,11 +347,31 @@ def main() -> None:
             help="Keep this off for the fastest first transcription.",
         )
         if use_diarization:
-            diarization_model_path = st.text_input(
-                "Local diarization pipeline path",
-                value=default_config.diarization_model_path or "",
-                help="Example: models/pyannote-speaker-diarization/config.yaml",
+            diarization_labels = [option.label for option in diarization_options] + [
+                "Custom path"
+            ]
+            if not diarization_options:
+                st.caption("No local diarization config.yaml found under models/.")
+            default_diarization_label = "Custom path"
+            for option in diarization_options:
+                if option.value == default_config.diarization_model_path:
+                    default_diarization_label = option.label
+                    break
+
+            selected_diarization_label = st.selectbox(
+                "Diarization model",
+                options=diarization_labels,
+                index=_selected_index(diarization_labels, default_diarization_label),
             )
+            if selected_diarization_label == "Custom path":
+                diarization_model_path = st.text_input(
+                    "Local diarization pipeline path",
+                    value=default_config.diarization_model_path or "",
+                    help="Example: models/pyannote-speaker-diarization/config.yaml",
+                )
+            else:
+                selected_index = diarization_labels.index(selected_diarization_label)
+                diarization_model_path = diarization_options[selected_index].value
         else:
             diarization_model_path = ""
         st.divider()

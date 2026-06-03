@@ -2,6 +2,7 @@ from pathlib import Path
 
 from transcripio.model_catalog import (
     discover_cached_hf_model_repos,
+    discover_local_diarization_config_paths,
     discover_local_whisper_model_paths,
     list_whisper_model_options,
 )
@@ -47,3 +48,11 @@ def test_model_options_do_not_duplicate_configured_cached_repos(tmp_path: Path) 
     )
 
     assert [option.value for option in options] == ["Systran/faster-whisper-small"]
+
+
+def test_discover_local_diarization_config_paths(tmp_path: Path) -> None:
+    config_path = tmp_path / "pyannote-speaker-diarization" / "config.yaml"
+    config_path.parent.mkdir()
+    config_path.write_text("pipeline: pyannote.audio.Pipeline", encoding="utf-8")
+
+    assert discover_local_diarization_config_paths(tmp_path) == [config_path]

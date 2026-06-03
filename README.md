@@ -214,6 +214,10 @@ launching the app, then paste the local path into the sidebar.
 Speaker diarization is optional. If the diarization path is empty, Transcripio performs
 regular transcription without speaker labels.
 
+Diarization means "who spoke when". It assigns labels such as `SPEAKER_00` and
+`SPEAKER_01`. After a result is created, use **Speaker names** above the segment table to
+rename those labels to real names for export.
+
 To use diarization locally:
 
 1. Create a Hugging Face account.
@@ -241,6 +245,9 @@ models/pyannote-speaker-diarization/config.yaml
 
 After the pipeline is downloaded, the app can use that local path without downloading it
 again. Keep the `models/` directory local and do not commit it.
+
+The sidebar automatically scans `models/` for local pyannote `config.yaml` files when
+**Assign speakers** is enabled.
 
 ## Offline Mode
 

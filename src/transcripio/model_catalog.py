@@ -22,6 +22,12 @@ class WhisperModelOption:
     is_downloaded: bool
 
 
+@dataclass(frozen=True, slots=True)
+class DiarizationModelOption:
+    label: str
+    value: str
+
+
 def list_whisper_model_options(
     configured_models: tuple[str, ...],
     models_dir: Path = Path("models"),
@@ -74,6 +80,36 @@ def discover_local_whisper_model_paths(models_dir: Path) -> list[Path]:
         if (path / "model.bin").exists() and (path / "config.json").exists():
             model_paths.append(path)
     return sorted(model_paths)
+
+
+def list_diarization_model_options(models_dir: Path = Path("models")) -> list[DiarizationModelOption]:
+    return [
+        DiarizationModelOption(label=str(path), value=str(path))
+        for path in discover_local_diarization_config_paths(models_dir)
+    ]
+
+
+def discover_local_diarization_config_paths(models_dir: Path) -> list[Path]:
+    if not models_dir.exists():
+        return []
+
+    return sorted(
+        path
+        for path in models_dir.rglob("config.yaml")
+        if path.is_file() and _looks_like_pyannote_config(path)
+    )
+
+
+def _looks_like_pyannote_config(path: Path) -> bool:
+    path_text = str(path).lower()
+    if "pyannote" in path_text or "diarization" in path_text:
+        return True
+
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+    return "pyannote" in text.lower() or "diarization" in text.lower()
 
 
 def _default_hf_cache_dir() -> Path:
