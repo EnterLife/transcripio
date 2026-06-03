@@ -81,7 +81,7 @@ def _show_result_editor(result: TranscriptionResult, history_dir: Path, editor_k
     edited_rows = st.data_editor(
         rows,
         key=f"{editor_key_prefix}-segments-{result.job_id}",
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         num_rows="fixed",
         column_config={
@@ -104,7 +104,12 @@ def _show_result_editor(result: TranscriptionResult, history_dir: Path, editor_k
     save_result(result, history_dir)
 
     preview = to_txt(result.segments)
-    st.text_area("Plain text preview", value=preview, height=220)
+    st.text_area(
+        "Plain text preview",
+        value=preview,
+        height=220,
+        key=f"{editor_key_prefix}-plain-preview-{result.job_id}",
+    )
 
     base_name = Path(result.source_name).stem or "transcript"
     txt = to_txt(result.segments)
@@ -251,7 +256,7 @@ def main() -> None:
                     st.caption(
                         "Installs via pip: " + ", ".join(CUDA_RUNTIME_PACKAGES)
                     )
-                    if st.button("Install GPU runtime", use_container_width=True):
+                    if st.button("Install GPU runtime", width="stretch"):
                         with st.spinner("Installing NVIDIA CUDA runtime packages"):
                             completed = install_cuda_runtime_packages()
                         if completed.returncode == 0:
@@ -404,7 +409,7 @@ def main() -> None:
             "Process queue",
             type="primary",
             disabled=not uploaded_files,
-            use_container_width=True,
+            width="stretch",
         )
 
         if run and uploaded_files:
