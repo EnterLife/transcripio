@@ -229,10 +229,12 @@ To use diarization locally:
      or to public gated repositories you can access.
 4. In the app sidebar, enable **Assign speakers**.
 5. Open **Download diarization model**.
-6. Paste the token into **HF token** and click **Check HF access**.
-7. If both repositories show access granted, click **Download speaker model**.
+6. Add the token in the main **Hugging Face** sidebar section and click **Save token**.
+7. Open **Download diarization model** and click **Check HF access**.
+8. If required repositories show access granted, click **Download speaker model**.
 
-The token is used for that download only and is not saved to `settings.json`.
+The token is saved to local `.env`, which is ignored by git, and is not saved to
+`settings.json`.
 
 You can also download from the command line. Set the token in PowerShell:
 

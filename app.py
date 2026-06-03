@@ -26,6 +26,12 @@ from transcripio.diarization_setup import (
     required_access_repos,
 )
 from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt
+from transcripio.hf_token import (
+    apply_saved_hf_token,
+    clear_saved_hf_token,
+    resolve_hf_token,
+    save_hf_token,
+)
 from transcripio.model_catalog import (
     WhisperModelOption,
     list_diarization_model_options,
@@ -218,7 +224,42 @@ def _launch_with_streamlit() -> NoReturn:
     raise SystemExit(streamlit_cli.main())
 
 
+def _show_hf_token_controls() -> str | None:
+    saved_or_env_token = resolve_hf_token()
+
+    st.header("Hugging Face")
+    if saved_or_env_token:
+        st.caption("HF_TOKEN is available for model downloads.")
+    else:
+        st.caption("HF_TOKEN is not set. Downloaded/local models work without it.")
+
+    with st.expander("HF token"):
+        token_input = st.text_input(
+            "HF token",
+            value="",
+            type="password",
+            placeholder="Paste a token to save or use for this session",
+            help="Saved to local .env, which is ignored by git.",
+        )
+        col1, col2 = st.columns(2)
+        if col1.button("Save token", width="stretch"):
+            try:
+                save_hf_token(token_input)
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                saved_or_env_token = resolve_hf_token()
+                st.success("HF_TOKEN saved to .env")
+        if col2.button("Clear token", width="stretch"):
+            clear_saved_hf_token()
+            saved_or_env_token = None
+            st.success("HF_TOKEN removed from .env")
+
+    return token_input.strip() or saved_or_env_token
+
+
 def main() -> None:
+    apply_saved_hf_token()
     settings = load_settings()
     default_config = settings.config
     model_options = list_whisper_model_options(settings.whisper_models)
@@ -234,6 +275,8 @@ def main() -> None:
         st.session_state.results = {}
 
     with st.sidebar:
+        hf_token = _show_hf_token_controls()
+        st.divider()
         st.header("Models")
         selected_default = _selected_model_option(model_options, default_config.whisper_model)
         model_labels = [option.label for option in model_options] + ["Custom name or path"]
@@ -385,7 +428,7 @@ def main() -> None:
         if use_diarization:
             with st.expander("Download diarization model"):
                 st.caption(
-                    "Accept the pyannote model terms on Hugging Face first. The token is used only for this download."
+                    "Accept the pyannote model terms on Hugging Face first. Downloads use the token from the Hugging Face section."
                 )
                 selected_diarization_repo = st.selectbox(
                     "Hugging Face repo",
@@ -414,17 +457,15 @@ def main() -> None:
                     value=str(default_config.diarization_output_dir),
                     help="Local folder for the pyannote pipeline snapshot.",
                 )
-                hf_token = st.text_input(
-                    "HF token",
-                    value="",
-                    type="password",
-                    help="Create this on Hugging Face after accepting pyannote model terms.",
-                )
+                if hf_token:
+                    st.caption("Using HF_TOKEN from the Hugging Face section.")
+                else:
+                    st.caption("Add HF_TOKEN in the Hugging Face section before checking or downloading.")
                 if st.button("Check HF access", width="stretch"):
                     try:
                         with st.spinner("Checking Hugging Face access"):
                             access_check = check_huggingface_diarization_access(
-                                token=hf_token,
+                                token=hf_token or "",
                                 repo_id=diarization_repo_id,
                             )
                     except Exception as exc:  # noqa: BLE001 - Streamlit should show a clean error.
@@ -443,7 +484,7 @@ def main() -> None:
                             download_result = download_diarization_pipeline(
                                 repo_id=diarization_repo_id,
                                 output_dir=Path(diarization_output_dir),
-                                token=hf_token,
+                                token=hf_token or "",
                             )
                     except Exception as exc:  # noqa: BLE001 - Streamlit should show a clean error.
                         st.error(f"Could not download diarization model: {exc}")
@@ -479,11 +520,6 @@ def main() -> None:
                 diarization_model_path = diarization_options[selected_index].value
         else:
             diarization_model_path = ""
-        st.divider()
-        if os.environ.get("HF_TOKEN"):
-            st.caption("HF_TOKEN is set for authenticated Hugging Face downloads.")
-        else:
-            st.caption("HF_TOKEN is not set. Downloaded/local models do not need it.")
 
     uploaded_files = st.file_uploader(
         "Add audio or video files",
