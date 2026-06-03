@@ -177,6 +177,29 @@ cache if they are not already present.
 The sidebar marks cached models as `downloaded`. If a model is already downloaded, keep
 **Use downloaded/local files only** enabled to avoid Hugging Face download checks.
 
+## GPU Performance
+
+Low GPU utilization is normal when transcribing one short file with a small model. Audio
+preparation, VAD, and some decoding work still run on CPU, and a `small` model may not
+fully load a modern GPU.
+
+For faster CUDA transcription, start with:
+
+```text
+Device: cuda
+Compute type: float16
+Batched inference: enabled
+Batch size: 8
+Beam size: 1
+Best of: 1
+Assign speakers: off
+```
+
+Increase **Batch size** to `12`, `16`, or `24` if VRAM allows it. Use a larger downloaded
+model such as `mobiuslabsgmbh/faster-whisper-large-v3-turbo` if you want the GPU to do
+more work. Higher **Beam size** and **Best of** can improve quality, but they add decoding
+work and may reduce throughput.
+
 Using a local model path:
 
 ```text

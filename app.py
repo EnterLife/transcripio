@@ -239,12 +239,74 @@ def main() -> None:
         else:
             auto_install_cuda_runtime = False
         compute_type_options = ["int8", "float16", "float32"]
+        default_compute_type = default_config.compute_type
+        if device == "cuda" and default_compute_type == "int8":
+            default_compute_type = "float16"
         compute_type = st.selectbox(
             "Compute type",
             options=compute_type_options,
-            index=_selected_index(compute_type_options, default_config.compute_type),
+            index=_selected_index(compute_type_options, default_compute_type),
             help="Use int8 for most CPU runs and float16 for many GPU runs.",
         )
+        use_batched_inference = False
+        batch_size = default_config.batch_size
+        beam_size = default_config.beam_size
+        best_of = default_config.best_of
+        cpu_threads = default_config.cpu_threads
+        num_workers = default_config.num_workers
+        vad_filter = default_config.vad_filter
+        with st.expander("Performance"):
+            use_batched_inference = st.checkbox(
+                "Batched inference",
+                value=device == "cuda" or default_config.use_batched_inference,
+                help="Improves GPU utilization by decoding multiple chunks together.",
+            )
+            if use_batched_inference:
+                batch_size = st.slider(
+                    "Batch size",
+                    min_value=1,
+                    max_value=32,
+                    value=default_config.batch_size,
+                    step=1,
+                    help="Higher values load the GPU more but require more VRAM.",
+                )
+            beam_size = st.slider(
+                "Beam size",
+                min_value=1,
+                max_value=8,
+                value=default_config.beam_size,
+                step=1,
+                help="1 is fastest. Higher values may improve quality but slow decoding.",
+            )
+            best_of = st.slider(
+                "Best of",
+                min_value=1,
+                max_value=8,
+                value=default_config.best_of,
+                step=1,
+                help="1 is fastest. Higher values do extra candidate decoding.",
+            )
+            vad_filter = st.checkbox(
+                "Skip silence",
+                value=default_config.vad_filter,
+                help="Filters silence before transcription. Usually faster for recordings with pauses.",
+            )
+            cpu_threads = st.number_input(
+                "CPU threads",
+                min_value=0,
+                max_value=64,
+                value=default_config.cpu_threads,
+                step=1,
+                help="0 lets CTranslate2 choose automatically.",
+            )
+            num_workers = st.number_input(
+                "Workers",
+                min_value=1,
+                max_value=8,
+                value=default_config.num_workers,
+                step=1,
+                help="More workers can improve throughput for queued files, but uses more memory.",
+            )
         language = st.text_input(
             "Language",
             value=default_config.language or "",
@@ -309,6 +371,13 @@ def main() -> None:
                 local_files_only=local_files_only,
                 allow_cpu_fallback=default_config.allow_cpu_fallback,
                 auto_install_cuda_runtime=auto_install_cuda_runtime,
+                use_batched_inference=use_batched_inference,
+                batch_size=batch_size,
+                beam_size=beam_size,
+                best_of=best_of,
+                cpu_threads=cpu_threads,
+                num_workers=num_workers,
+                vad_filter=vad_filter,
             )
             pipeline = TranscriptionPipeline(config)
             overall_progress = st.progress(0, text="Starting queue")

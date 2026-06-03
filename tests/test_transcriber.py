@@ -11,7 +11,7 @@ def test_cuda_cublas_error_falls_back_to_cpu(monkeypatch) -> None:
     monkeypatch.setitem(
         sys.modules,
         "faster_whisper",
-        types.SimpleNamespace(WhisperModel=object),
+        types.SimpleNamespace(BatchedInferencePipeline=object, WhisperModel=object),
     )
     transcriber = WhisperTranscriber(AppConfig(device="cuda", compute_type="float16"))
     calls: list[tuple[str, str]] = []
@@ -24,6 +24,7 @@ def test_cuda_cublas_error_falls_back_to_cpu(monkeypatch) -> None:
         return cpu_model
 
     monkeypatch.setattr(transcriber, "_create_model", fake_create_model)
+    monkeypatch.setattr(transcriber, "_wrap_model", lambda model, _pipeline_class: model)
 
     assert transcriber._load_model() is cpu_model
     assert calls == [("cuda", "float16"), ("cpu", "int8")]
@@ -72,3 +73,27 @@ def test_cuda_model_auto_installs_missing_runtime(monkeypatch) -> None:
 
     assert configure_calls == 2
     assert install_calls == 1
+
+
+def test_batched_transcribe_passes_batch_size(monkeypatch, tmp_path: Path) -> None:
+    transcriber = WhisperTranscriber(
+        AppConfig(use_batched_inference=True, batch_size=12, beam_size=1, best_of=1)
+    )
+    captured_options = {}
+
+    class FakeInfo:
+        duration = 1.0
+        language = "en"
+
+    class FakeModel:
+        def transcribe(self, _audio_path, **options):
+            captured_options.update(options)
+            return iter(()), FakeInfo()
+
+    monkeypatch.setattr(transcriber, "_load_model", lambda: FakeModel())
+
+    transcriber.transcribe(tmp_path / "audio.wav")
+
+    assert captured_options["batch_size"] == 12
+    assert captured_options["beam_size"] == 1
+    assert captured_options["best_of"] == 1

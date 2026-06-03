@@ -22,6 +22,13 @@ class AppConfig:
     local_files_only: bool = False
     allow_cpu_fallback: bool = True
     auto_install_cuda_runtime: bool = True
+    use_batched_inference: bool = False
+    batch_size: int = 8
+    beam_size: int = 1
+    best_of: int = 1
+    cpu_threads: int = 0
+    num_workers: int = 1
+    vad_filter: bool = True
 
 
 @dataclass(slots=True)
@@ -106,6 +113,34 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
             transcription_settings.get("auto_install_cuda_runtime"),
             default_config.auto_install_cuda_runtime,
         ),
+        use_batched_inference=_bool(
+            transcription_settings.get("use_batched_inference"),
+            default_config.use_batched_inference,
+        ),
+        batch_size=_positive_int(
+            transcription_settings.get("batch_size"),
+            default_config.batch_size,
+        ),
+        beam_size=_positive_int(
+            transcription_settings.get("beam_size"),
+            default_config.beam_size,
+        ),
+        best_of=_positive_int(
+            transcription_settings.get("best_of"),
+            default_config.best_of,
+        ),
+        cpu_threads=_non_negative_int(
+            transcription_settings.get("cpu_threads"),
+            default_config.cpu_threads,
+        ),
+        num_workers=_positive_int(
+            transcription_settings.get("num_workers"),
+            default_config.num_workers,
+        ),
+        vad_filter=_bool(
+            transcription_settings.get("vad_filter"),
+            default_config.vad_filter,
+        ),
     )
 
     defaults = AppSettings()
@@ -154,6 +189,22 @@ def _bool(value: Any, default: bool) -> bool:
         if normalized in {"0", "false", "no", "off"}:
             return False
     return bool(value)
+
+
+def _positive_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _non_negative_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
 
 
 def _upload_types(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:

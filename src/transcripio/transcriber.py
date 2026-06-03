@@ -22,25 +22,27 @@ class WhisperTranscriber:
             return self._model
 
         try:
-            from faster_whisper import WhisperModel
+            from faster_whisper import BatchedInferencePipeline, WhisperModel
         except ImportError as exc:
             raise RuntimeError(
                 "faster-whisper is not installed. Run: pip install -r requirements.txt"
             ) from exc
 
         try:
-            self._model = self._create_model(
+            model = self._create_model(
                 WhisperModel,
                 device=self._config.device,
                 compute_type=self._config.compute_type,
             )
+            self._model = self._wrap_model(model, BatchedInferencePipeline)
         except Exception as exc:
             if not self._should_fallback_to_cpu(exc):
                 raise
             self.runtime_notice = (
                 "CUDA libraries are not available, so transcription is running on CPU with int8."
             )
-            self._model = self._create_model(WhisperModel, device="cpu", compute_type="int8")
+            model = self._create_model(WhisperModel, device="cpu", compute_type="int8")
+            self._model = self._wrap_model(model, BatchedInferencePipeline)
         return self._model
 
     def _create_model(self, model_class, device: str, compute_type: str):
@@ -61,7 +63,14 @@ class WhisperTranscriber:
             compute_type=compute_type,
             local_files_only=self._config.local_files_only,
             use_auth_token=os.environ.get("HF_TOKEN") or None,
+            cpu_threads=self._config.cpu_threads,
+            num_workers=self._config.num_workers,
         )
+
+    def _wrap_model(self, model, batched_pipeline_class):
+        if not self._config.use_batched_inference:
+            return model
+        return batched_pipeline_class(model)
 
     def _should_fallback_to_cpu(self, exc: Exception) -> bool:
         if not self._config.allow_cpu_fallback or self._config.device != "cuda":
@@ -77,12 +86,16 @@ class WhisperTranscriber:
         on_segment: SegmentProgressCallback | None = None,
     ) -> tuple[list[TranscriptSegment], str | None, float | None]:
         model = self._load_model()
-        segments_iter, info = model.transcribe(
-            str(audio_path),
-            language=self._config.language,
-            vad_filter=True,
-            beam_size=5,
-        )
+        transcribe_options = {
+            "language": self._config.language,
+            "vad_filter": self._config.vad_filter,
+            "beam_size": self._config.beam_size,
+            "best_of": self._config.best_of,
+        }
+        if self._config.use_batched_inference:
+            transcribe_options["batch_size"] = self._config.batch_size
+
+        segments_iter, info = model.transcribe(str(audio_path), **transcribe_options)
 
         duration = getattr(info, "duration", None)
         segments: list[TranscriptSegment] = []

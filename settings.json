@@ -36,7 +36,14 @@
     "ffmpeg_path": "ffmpeg",
     "local_files_only": false,
     "allow_cpu_fallback": true,
-    "auto_install_cuda_runtime": true
+    "auto_install_cuda_runtime": true,
+    "use_batched_inference": false,
+    "batch_size": 8,
+    "beam_size": 1,
+    "best_of": 1,
+    "cpu_threads": 0,
+    "num_workers": 1,
+    "vad_filter": true
   },
   "storage": {
     "output_dir": "data/output",
