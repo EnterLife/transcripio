@@ -56,7 +56,7 @@ def _inject_status_spinner_css() -> None:
     )
 
 
-def _show_result_editor(result: TranscriptionResult, history_dir: Path) -> None:
+def _show_result_editor(result: TranscriptionResult, history_dir: Path, editor_key_prefix: str) -> None:
     st.subheader(result.source_name)
     if result.duration is not None:
         st.caption(f"Language: {result.language or 'unknown'} | Duration: {result.duration:.1f}s")
@@ -74,7 +74,7 @@ def _show_result_editor(result: TranscriptionResult, history_dir: Path) -> None:
     ]
     edited_rows = st.data_editor(
         rows,
-        key=f"segments-{result.job_id}",
+        key=f"{editor_key_prefix}-segments-{result.job_id}",
         use_container_width=True,
         hide_index=True,
         num_rows="fixed",
@@ -338,7 +338,11 @@ def main() -> None:
                 st.success(f"Finished `{uploaded_file.name}`")
 
         if st.session_state.results:
-            _show_result_editor(list(st.session_state.results.values())[-1], default_config.history_dir)
+            _show_result_editor(
+                list(st.session_state.results.values())[-1],
+                default_config.history_dir,
+                "queue",
+            )
 
     with history_tab:
         history_paths = list_history(default_config.history_dir)
@@ -350,7 +354,7 @@ def main() -> None:
             selected_path = history_paths[labels.index(selected_history)]
             loaded_result = load_result(selected_path)
             st.session_state.results[loaded_result.job_id] = loaded_result
-            _show_result_editor(loaded_result, default_config.history_dir)
+            _show_result_editor(loaded_result, default_config.history_dir, "history")
 
 
 if __name__ == "__main__":
