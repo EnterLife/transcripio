@@ -3,6 +3,19 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
+import sys
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+SRC_DIR = ROOT_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from transcripio.diarization_setup import (
+    DEFAULT_DIARIZATION_OUTPUT_DIR,
+    DEFAULT_DIARIZATION_REPO_ID,
+    download_diarization_pipeline,
+)
 
 
 def main() -> int:
@@ -11,12 +24,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--repo-id",
-        default="pyannote/speaker-diarization-3.1",
+        default=DEFAULT_DIARIZATION_REPO_ID,
         help="Hugging Face repository id for the diarization pipeline.",
     )
     parser.add_argument(
         "--output-dir",
-        default="models/pyannote-speaker-diarization",
+        default=str(DEFAULT_DIARIZATION_OUTPUT_DIR),
         help="Local directory where the pipeline snapshot should be stored.",
     )
     parser.add_argument(
@@ -32,26 +45,13 @@ def main() -> int:
             "pyannote model terms on Hugging Face."
         )
 
-    try:
-        from huggingface_hub import snapshot_download
-    except ImportError as exc:
-        raise SystemExit("huggingface_hub is missing. Run .\\setup.ps1 first.") from exc
-
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    snapshot_path = snapshot_download(
+    result = download_diarization_pipeline(
         repo_id=args.repo_id,
-        local_dir=str(output_dir),
+        output_dir=Path(args.output_dir),
         token=args.token,
     )
-
-    config_path = Path(snapshot_path) / "config.yaml"
-    print(f"Pipeline snapshot saved to: {snapshot_path}")
-    if config_path.exists():
-        print(f"Use this path in the app: {config_path}")
-    else:
-        print("Download completed, but config.yaml was not found. Check the repository contents.")
+    print(f"Pipeline snapshot saved to: {result.snapshot_path}")
+    print(f"Use this path in the app: {result.config_path}")
     return 0
 
 

@@ -19,6 +19,7 @@ from transcripio.cuda_runtime import (
     configure_cuda_dll_paths,
     install_cuda_runtime_packages,
 )
+from transcripio.diarization_setup import download_diarization_pipeline
 from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt
 from transcripio.model_catalog import (
     WhisperModelOption,
@@ -352,6 +353,41 @@ def main() -> None:
             help="Keep this off for the fastest first transcription.",
         )
         if use_diarization:
+            with st.expander("Download diarization model"):
+                st.caption(
+                    "Accept the pyannote model terms on Hugging Face first. The token is used only for this download."
+                )
+                diarization_repo_id = st.text_input(
+                    "Hugging Face repo",
+                    value=default_config.diarization_repo_id,
+                    help="Default: pyannote/speaker-diarization-3.1",
+                )
+                diarization_output_dir = st.text_input(
+                    "Save to",
+                    value=str(default_config.diarization_output_dir),
+                    help="Local folder for the pyannote pipeline snapshot.",
+                )
+                hf_token = st.text_input(
+                    "HF token",
+                    value="",
+                    type="password",
+                    help="Create this on Hugging Face after accepting pyannote model terms.",
+                )
+                if st.button("Download speaker model", width="stretch"):
+                    try:
+                        with st.spinner("Downloading local diarization pipeline"):
+                            download_result = download_diarization_pipeline(
+                                repo_id=diarization_repo_id,
+                                output_dir=Path(diarization_output_dir),
+                                token=hf_token,
+                            )
+                    except Exception as exc:  # noqa: BLE001 - Streamlit should show a clean error.
+                        st.error(f"Could not download diarization model: {exc}")
+                    else:
+                        diarization_options = list_diarization_model_options()
+                        default_config.diarization_model_path = str(download_result.config_path)
+                        st.success(f"Downloaded: {download_result.config_path}")
+
             diarization_labels = [option.label for option in diarization_options] + [
                 "Custom path"
             ]

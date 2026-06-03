@@ -18,6 +18,8 @@ def test_load_settings_from_json(tmp_path: Path) -> None:
                 "transcription": {
                     "whisper_model": "models/whisper-small",
                     "language": "",
+                    "diarization_repo_id": "pyannote/test",
+                    "diarization_output_dir": "tmp/pyannote",
                     "ffmpeg_path": "bin/ffmpeg.exe",
                     "use_batched_inference": True,
                     "batch_size": 16,
@@ -42,6 +44,8 @@ def test_load_settings_from_json(tmp_path: Path) -> None:
     assert settings.upload_types == ("mp3", "wav")
     assert settings.config.whisper_model == "models/whisper-small"
     assert settings.config.language is None
+    assert settings.config.diarization_repo_id == "pyannote/test"
+    assert settings.config.diarization_output_dir == Path("tmp/pyannote")
     assert settings.config.ffmpeg_path == "bin/ffmpeg.exe"
     assert settings.config.use_batched_inference is True
     assert settings.config.batch_size == 16

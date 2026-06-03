@@ -5,6 +5,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from transcripio.diarization_setup import (
+    DEFAULT_DIARIZATION_OUTPUT_DIR,
+    DEFAULT_DIARIZATION_REPO_ID,
+)
+
 
 SETTINGS_PATH = Path("settings.json")
 
@@ -16,6 +21,8 @@ class AppConfig:
     compute_type: str = "int8"
     language: str | None = None
     diarization_model_path: str | None = None
+    diarization_repo_id: str = DEFAULT_DIARIZATION_REPO_ID
+    diarization_output_dir: Path = DEFAULT_DIARIZATION_OUTPUT_DIR
     ffmpeg_path: str = "ffmpeg"
     output_dir: Path = Path("data/output")
     history_dir: Path = Path("data/history")
@@ -97,6 +104,16 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
         diarization_model_path=_optional_text(
             transcription_settings.get("diarization_model_path"),
             default_config.diarization_model_path,
+        ),
+        diarization_repo_id=_text(
+            transcription_settings.get("diarization_repo_id"),
+            default_config.diarization_repo_id,
+        ),
+        diarization_output_dir=Path(
+            _text(
+                transcription_settings.get("diarization_output_dir"),
+                str(default_config.diarization_output_dir),
+            )
         ),
         ffmpeg_path=_text(transcription_settings.get("ffmpeg_path"), default_config.ffmpeg_path),
         output_dir=Path(_text(storage_settings.get("output_dir"), str(default_config.output_dir))),

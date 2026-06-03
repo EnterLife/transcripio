@@ -223,19 +223,26 @@ To use diarization locally:
 1. Create a Hugging Face account.
 2. Accept the terms for the pyannote diarization repository you want to use.
 3. Create a Hugging Face access token.
-4. Set the token in PowerShell:
+4. In the app sidebar, enable **Assign speakers**.
+5. Open **Download diarization model**.
+6. Paste the token into **HF token** and click **Download speaker model**.
+
+The token is used for that download only and is not saved to `settings.json`.
+
+You can also download from the command line. Set the token in PowerShell:
 
 ```powershell
 $env:HF_TOKEN="hf_your_token_here"
 ```
 
-5. Download the pipeline snapshot into `models/`:
+Then download the pipeline snapshot into `models/`:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\prepare_pyannote.py
 ```
 
-6. The script prints a local `config.yaml` path. Paste that path into the app sidebar.
+The script prints a local `config.yaml` path. Paste that path into the app sidebar if it
+is not selected automatically.
 
 Default output path:
 
