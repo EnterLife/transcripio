@@ -13,7 +13,7 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from transcripio.config import AppConfig, load_settings
+from transcripio.config import AppConfig, AppSettings, LlmProviderConfig, load_settings
 from transcripio.cuda_runtime import (
     CUDA_RUNTIME_PACKAGES,
     configure_cuda_dll_paths,
@@ -37,6 +37,7 @@ from transcripio.model_catalog import (
     list_diarization_model_options,
     list_whisper_model_options,
 )
+from transcripio.llm import LlmError, OpenAICompatibleLlm
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio.pipeline import TranscriptionPipeline
 from transcripio.storage import list_history, load_result, save_result
@@ -72,7 +73,12 @@ def _inject_status_spinner_css() -> None:
     )
 
 
-def _show_result_editor(result: TranscriptionResult, history_dir: Path, editor_key_prefix: str) -> None:
+def _show_result_editor(
+    result: TranscriptionResult,
+    history_dir: Path,
+    editor_key_prefix: str,
+    llm_provider_config: LlmProviderConfig | None = None,
+) -> None:
     st.subheader(result.source_name)
     if result.duration is not None:
         st.caption(f"Language: {result.language or 'unknown'} | Duration: {result.duration:.1f}s")
@@ -122,6 +128,8 @@ def _show_result_editor(result: TranscriptionResult, history_dir: Path, editor_k
         height=220,
         key=f"{editor_key_prefix}-plain-preview-{result.job_id}",
     )
+
+    _show_llm_actions(result, editor_key_prefix, llm_provider_config)
 
     base_name = Path(result.source_name).stem or "transcript"
     txt = to_txt(result.segments)
@@ -188,6 +196,103 @@ def _speaker_name_overrides(
             if name:
                 overrides[label] = name
         return overrides
+
+
+def _show_llm_actions(
+    result: TranscriptionResult,
+    editor_key_prefix: str,
+    provider_config: LlmProviderConfig | None,
+) -> None:
+    if provider_config is None:
+        return
+
+    note_key = f"{editor_key_prefix}-llm-note-{result.job_id}-{provider_config.name}"
+    prompt_options = {
+        "Summary": "Summarize the transcript in concise bullet points.",
+        "Action items": (
+            "Extract action items, owners, and deadlines. Mark missing owners or dates as unknown."
+        ),
+        "Meeting notes": "Write structured meeting notes with decisions, risks, and next steps.",
+        "Custom": "",
+    }
+
+    with st.expander("LLM notes"):
+        st.caption(f"{provider_config.name}: {provider_config.model}")
+        prompt_label = st.selectbox(
+            "Prompt",
+            options=list(prompt_options),
+            key=f"{editor_key_prefix}-llm-prompt-{result.job_id}",
+        )
+        if prompt_label == "Custom":
+            instruction = st.text_area(
+                "Instruction",
+                value="",
+                height=100,
+                key=f"{editor_key_prefix}-llm-custom-instruction-{result.job_id}",
+            )
+        else:
+            instruction = prompt_options[prompt_label]
+
+        if st.button(
+            "Generate",
+            key=f"{editor_key_prefix}-llm-generate-{result.job_id}",
+            width="stretch",
+        ):
+            api_key = os.getenv(provider_config.api_key_env or "")
+            try:
+                with st.spinner(f"Calling {provider_config.name}"):
+                    note = OpenAICompatibleLlm(
+                        provider_config,
+                        api_key=api_key,
+                    ).generate_transcript_note(result.segments, instruction)
+            except LlmError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state[note_key] = note
+
+        if note_key in st.session_state:
+            st.text_area(
+                "Output",
+                value=st.session_state[note_key],
+                height=260,
+                key=f"{editor_key_prefix}-llm-output-{result.job_id}",
+            )
+            st.download_button(
+                "Download note",
+                st.session_state[note_key],
+                file_name=f"{Path(result.source_name).stem or 'transcript'}-llm-note.txt",
+                mime="text/plain",
+                key=f"{editor_key_prefix}-llm-download-{result.job_id}",
+            )
+
+
+def _select_llm_provider(settings: AppSettings) -> LlmProviderConfig | None:
+    if not settings.llm_providers:
+        st.caption("No LLM providers configured.")
+        return None
+
+    provider_names = [provider.name for provider in settings.llm_providers]
+    selected_name = st.selectbox(
+        "Provider",
+        options=provider_names,
+        index=_selected_index(provider_names, settings.default_llm_provider),
+    )
+    provider = settings.llm_providers[provider_names.index(selected_name)]
+    st.caption(f"{provider.base_url} | {provider.model}")
+
+    if provider.requires_api_key:
+        if provider.api_key_env and os.getenv(provider.api_key_env):
+            st.caption(f"{provider.api_key_env} is available.")
+        elif provider.api_key_env:
+            st.warning(f"Set {provider.api_key_env} before using this provider.")
+        else:
+            st.warning("This provider requires an API key.")
+    elif provider.api_key_env and os.getenv(provider.api_key_env):
+        st.caption(f"{provider.api_key_env} is available.")
+    else:
+        st.caption("API key is optional for this provider.")
+
+    return provider
 
 
 def _selected_index(options: list[str], value: str, default: int = 0) -> int:
@@ -521,6 +626,10 @@ def main() -> None:
         else:
             diarization_model_path = ""
 
+        st.divider()
+        st.header("LLM")
+        llm_provider_config = _select_llm_provider(settings)
+
     uploaded_files = st.file_uploader(
         "Add audio or video files",
         type=list(settings.upload_types),
@@ -601,6 +710,7 @@ def main() -> None:
                 list(st.session_state.results.values())[-1],
                 default_config.history_dir,
                 "queue",
+                llm_provider_config,
             )
 
     with history_tab:
@@ -613,7 +723,12 @@ def main() -> None:
             selected_path = history_paths[labels.index(selected_history)]
             loaded_result = load_result(selected_path)
             st.session_state.results[loaded_result.job_id] = loaded_result
-            _show_result_editor(loaded_result, default_config.history_dir, "history")
+            _show_result_editor(
+                loaded_result,
+                default_config.history_dir,
+                "history",
+                llm_provider_config,
+            )
 
 
 if __name__ == "__main__":

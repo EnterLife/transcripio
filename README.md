@@ -14,6 +14,7 @@ and exports editable results as TXT, SRT, VTT, DOCX, and JSON.
 - Use an optional local pyannote diarization pipeline for speaker labels.
 - Show per-file and queue-level progress.
 - Edit transcript segments in the UI before downloading.
+- Generate optional transcript notes with OpenAI-compatible LLM providers.
 - Save transcript history under `data/history/`.
 - Save prepared WAV files under `data/output/`.
 - Export TXT, SRT, VTT, DOCX, and JSON.
@@ -35,6 +36,7 @@ transcripio/
     transcriber.py               faster-whisper adapter
     diarization.py               pyannote adapter and speaker assignment
     pipeline.py                  end-to-end transcription workflow
+    llm.py                       OpenAI-compatible LLM adapter
     formatters.py                TXT/SRT/VTT/DOCX/JSON exports
     storage.py                   transcript history persistence
     models.py                    shared dataclasses
@@ -137,7 +139,8 @@ Streamlit automatically.
 7. Upload one or more audio/video files.
 8. Click **Process queue**.
 9. Edit speaker labels or transcript text in the segment table.
-10. Download TXT, SRT, VTT, DOCX, or JSON.
+10. Optionally generate LLM notes from the edited transcript.
+11. Download TXT, SRT, VTT, DOCX, JSON, or generated notes.
 
 ## Supported Input Formats
 
@@ -263,6 +266,71 @@ again. Keep the `models/` directory local and do not commit it.
 The sidebar automatically scans `models/` for local pyannote `config.yaml` files when
 **Assign speakers** is enabled.
 
+## LLM Notes
+
+Transcripio can send an edited transcript to an OpenAI-compatible chat completions
+provider for optional notes, summaries, action items, or a custom prompt. This step is
+separate from transcription and runs only when you click **Generate** in **LLM notes**.
+
+The default `settings.json` includes two provider examples:
+
+```json
+"llm": {
+  "default_provider": "LM Studio",
+  "providers": [
+    {
+      "name": "LM Studio",
+      "base_url": "http://localhost:1234/v1",
+      "model": "local-model",
+      "api_key_env": "LM_STUDIO_API_KEY",
+      "requires_api_key": false
+    },
+    {
+      "name": "Yandex AI Studio",
+      "base_url": "https://llm.api.cloud.yandex.net/v1",
+      "model": "gpt://<folder_id>/yandexgpt/latest",
+      "api_key_env": "YANDEX_API_KEY",
+      "requires_api_key": true
+    }
+  ]
+}
+```
+
+### LM Studio
+
+1. Open LM Studio.
+2. Download and load a chat model.
+3. Start the local server in the Developer/API section, or run:
+
+```powershell
+lms server start
+```
+
+4. In `settings.json`, set the provider `model` to the model ID served by LM Studio.
+5. Keep the base URL as:
+
+```text
+http://localhost:1234/v1
+```
+
+LM Studio usually does not require an API key for local use. If your local server is
+configured to require one, set the variable named in `api_key_env` before launching:
+
+```powershell
+$env:LM_STUDIO_API_KEY="your-local-key"
+```
+
+### Yandex AI Studio and other providers
+
+For a remote OpenAI-compatible provider, add or edit a provider entry with its `base_url`,
+`model`, and `api_key_env`. Keep the real key out of `settings.json`:
+
+```powershell
+$env:YANDEX_API_KEY="your-api-key"
+```
+
+Then choose the provider in the sidebar and generate notes from a completed transcript.
+
 ## Offline Mode
 
 For fully offline transcription:
@@ -271,8 +339,9 @@ For fully offline transcription:
 2. Install `ffmpeg`.
 3. Download or prepare a local CTranslate2 Whisper model.
 4. Optional: download a local pyannote diarization pipeline.
-5. Disconnect from the network.
-6. In the app sidebar, use only local model paths.
+5. Optional: run LM Studio locally if you want offline LLM notes.
+6. Disconnect from the network.
+7. In the app sidebar, use only local model paths and local LLM providers.
 
 If you enter a model name such as `small` while offline and the model is not cached yet,
 `faster-whisper` may fail because it cannot download the model.

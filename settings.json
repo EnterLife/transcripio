@@ -47,6 +47,29 @@
     "num_workers": 1,
     "vad_filter": true
   },
+  "llm": {
+    "default_provider": "LM Studio",
+    "providers": [
+      {
+        "name": "LM Studio",
+        "base_url": "http://localhost:1234/v1",
+        "model": "local-model",
+        "api_key_env": "LM_STUDIO_API_KEY",
+        "requires_api_key": false,
+        "temperature": 0.2,
+        "max_tokens": 1000
+      },
+      {
+        "name": "Yandex AI Studio",
+        "base_url": "https://llm.api.cloud.yandex.net/v1",
+        "model": "gpt://<folder_id>/yandexgpt/latest",
+        "api_key_env": "YANDEX_API_KEY",
+        "requires_api_key": true,
+        "temperature": 0.2,
+        "max_tokens": 1000
+      }
+    ]
+  },
   "storage": {
     "output_dir": "data/output",
     "history_dir": "data/history"

@@ -15,6 +15,17 @@ SETTINGS_PATH = Path("settings.json")
 
 
 @dataclass(slots=True)
+class LlmProviderConfig:
+    name: str
+    base_url: str
+    model: str
+    api_key_env: str | None = None
+    requires_api_key: bool = True
+    temperature: float = 0.2
+    max_tokens: int = 1000
+
+
+@dataclass(slots=True)
 class AppConfig:
     whisper_model: str = "small"
     device: str = "cpu"
@@ -66,6 +77,23 @@ class AppSettings:
         "Systran/faster-whisper-small",
         "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
     )
+    llm_providers: tuple[LlmProviderConfig, ...] = (
+        LlmProviderConfig(
+            name="LM Studio",
+            base_url="http://localhost:1234/v1",
+            model="local-model",
+            api_key_env="LM_STUDIO_API_KEY",
+            requires_api_key=False,
+        ),
+        LlmProviderConfig(
+            name="Yandex AI Studio",
+            base_url="https://llm.api.cloud.yandex.net/v1",
+            model="gpt://<folder_id>/yandexgpt/latest",
+            api_key_env="YANDEX_API_KEY",
+            requires_api_key=True,
+        ),
+    )
+    default_llm_provider: str = "LM Studio"
     config: AppConfig = field(default_factory=AppConfig)
 
 
@@ -88,6 +116,7 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
     ui_settings = _section(raw_settings, "ui")
     transcription_settings = _section(raw_settings, "transcription")
     storage_settings = _section(raw_settings, "storage")
+    llm_settings = _section(raw_settings, "llm")
 
     default_config = AppConfig()
     config = AppConfig(
@@ -170,6 +199,14 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
             transcription_settings.get("whisper_models"),
             defaults.whisper_models,
         ),
+        llm_providers=_llm_provider_configs(
+            llm_settings.get("providers"),
+            defaults.llm_providers,
+        ),
+        default_llm_provider=_text(
+            llm_settings.get("default_provider"),
+            defaults.default_llm_provider,
+        ),
         config=config,
     )
 
@@ -224,6 +261,14 @@ def _non_negative_int(value: Any, default: int) -> int:
     return parsed if parsed >= 0 else default
 
 
+def _non_negative_float(value: Any, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
+
+
 def _upload_types(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:
     if value is None:
         return default
@@ -244,3 +289,49 @@ def _text_list(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:
 
     text_values = tuple(str(item).strip() for item in value if str(item).strip())
     return text_values or default
+
+
+def _llm_provider_configs(
+    value: Any,
+    default: tuple[LlmProviderConfig, ...],
+) -> tuple[LlmProviderConfig, ...]:
+    if value is None:
+        return default
+    if not isinstance(value, list):
+        raise SettingsError("Settings value 'llm.providers' must be a list.")
+
+    providers: list[LlmProviderConfig] = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            raise SettingsError(f"Settings value 'llm.providers[{index}]' must be an object.")
+
+        default_provider = default[min(index - 1, len(default) - 1)] if default else None
+        fallback_name = default_provider.name if default_provider else "Provider"
+        fallback_base_url = default_provider.base_url if default_provider else ""
+        fallback_model = default_provider.model if default_provider else ""
+        fallback_api_key_env = default_provider.api_key_env if default_provider else None
+        fallback_requires_api_key = (
+            default_provider.requires_api_key if default_provider else True
+        )
+        fallback_temperature = default_provider.temperature if default_provider else 0.2
+        fallback_max_tokens = default_provider.max_tokens if default_provider else 1000
+
+        providers.append(
+            LlmProviderConfig(
+                name=_text(item.get("name"), fallback_name),
+                base_url=_text(item.get("base_url"), fallback_base_url),
+                model=_text(item.get("model"), fallback_model),
+                api_key_env=_optional_text(item.get("api_key_env"), fallback_api_key_env),
+                requires_api_key=_bool(
+                    item.get("requires_api_key"),
+                    fallback_requires_api_key,
+                ),
+                temperature=_non_negative_float(
+                    item.get("temperature"),
+                    fallback_temperature,
+                ),
+                max_tokens=_positive_int(item.get("max_tokens"), fallback_max_tokens),
+            )
+        )
+
+    return tuple(providers) or default
