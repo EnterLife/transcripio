@@ -163,6 +163,11 @@ Video:
 - `m4v`
 
 All supported inputs are converted to a mono 16 kHz WAV file before model processing.
+For video files, Transcripio extracts the audio track with `ffmpeg` first and runs the
+models against the prepared WAV, not the original video container. The bundled Streamlit
+configuration raises the upload ceiling to 102400 MB for local large-file workflows, and
+the UI saves uploads to a temporary file as a stream instead of copying the whole file
+through an in-memory buffer.
 
 ## Local Whisper Models
 

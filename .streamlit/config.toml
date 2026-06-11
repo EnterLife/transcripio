@@ -3,3 +3,5 @@ gatherUsageStats = false
 
 [server]
 showEmailPrompt = false
+maxUploadSize = 102400
+maxMessageSize = 102400

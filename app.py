@@ -4,10 +4,12 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from shutil import copyfileobj
 from typing import NoReturn
 
 import streamlit as st
 
+UPLOAD_COPY_CHUNK_SIZE = 1024 * 1024
 ROOT_DIR = Path(__file__).resolve().parent
 SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
@@ -318,6 +320,14 @@ def _has_streamlit_context() -> bool:
     except ImportError:
         return False
     return get_script_run_ctx(suppress_warning=True) is not None
+
+
+def _save_uploaded_media(uploaded_file, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    uploaded_file.seek(0)
+    with destination.open("wb") as output_file:
+        copyfileobj(uploaded_file, output_file, UPLOAD_COPY_CHUNK_SIZE)
+    uploaded_file.seek(0)
 
 
 def _launch_with_streamlit() -> NoReturn:
@@ -686,8 +696,8 @@ def main() -> None:
                 file_progress = st.progress(0, text="Preparing file")
 
                 with tempfile.TemporaryDirectory(prefix="transcripio-ui-") as tmp_dir:
-                    input_path = Path(tmp_dir) / uploaded_file.name
-                    input_path.write_bytes(uploaded_file.getbuffer())
+                    input_path = Path(tmp_dir) / Path(uploaded_file.name).name
+                    _save_uploaded_media(uploaded_file, input_path)
 
                     def on_step(message: str, value: float) -> None:
                         clamped = min(max(value, 0.0), 1.0)
