@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from shutil import copyfileobj
 from typing import NoReturn
@@ -40,9 +41,16 @@ from transcripio.model_catalog import (
     list_whisper_model_options,
 )
 from transcripio.llm import LlmError, OpenAICompatibleLlm
+from transcripio.media import VIDEO_EXTENSIONS
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio.pipeline import TranscriptionPipeline
 from transcripio.storage import list_history, load_result, save_result
+
+
+@dataclass(frozen=True)
+class AudioDownload:
+    file_name: str
+    data: bytes
 
 
 def _inject_status_spinner_css() -> None:
@@ -176,6 +184,33 @@ def _show_result_editor(
         mime="application/json",
         key=f"{editor_key_prefix}-download-json-{result.job_id}",
     )
+
+    audio_download = _extracted_audio_download(result)
+    if audio_download:
+        st.download_button(
+            "Audio WAV",
+            audio_download.data,
+            file_name=audio_download.file_name,
+            mime="audio/wav",
+            key=f"{editor_key_prefix}-download-audio-{result.job_id}",
+        )
+    elif _is_video_source(result):
+        st.caption("Extracted audio file is no longer available.")
+
+
+def _extracted_audio_download(result: TranscriptionResult) -> AudioDownload | None:
+    if not _is_video_source(result) or not result.audio_path.exists():
+        return None
+
+    base_name = Path(result.source_name).stem or "audio"
+    return AudioDownload(
+        file_name=f"{base_name}.wav",
+        data=result.audio_path.read_bytes(),
+    )
+
+
+def _is_video_source(result: TranscriptionResult) -> bool:
+    return Path(result.source_name).suffix.lower() in VIDEO_EXTENSIONS
 
 
 def _speaker_name_overrides(
