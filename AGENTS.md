@@ -33,7 +33,9 @@ to extend without leaking model, media, or UI details across module boundaries.
 - `src/transcripio/models.py` - dataclasses used across the app.
 - `tests/` - focused behavior tests.
 - `requirements.txt` - single dependency list for the project.
-- `setup.ps1` - creates `.venv`, installs dependencies, and installs the package editable.
+- `scripts/setup.bat` - creates `.venv`, installs dependencies, and installs the package editable.
+- `scripts/run.bat` - launches the Streamlit app.
+- `scripts/install_gpu_runtime.bat` - optionally installs NVIDIA CUDA runtime packages.
 - `README.md` - setup, launch, and model notes.
 - `data/` - local runtime input/output/tmp artifacts; do not commit contents.
 - `models/` - local model files; do not commit contents.
@@ -149,14 +151,13 @@ A code change is complete only when:
 Create or update the local environment:
 
 ```powershell
-.\setup.ps1
+.\scripts\setup.bat
 ```
 
 Run the app:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-streamlit run app.py
+.\scripts\run.bat
 ```
 
 Run focused checks:

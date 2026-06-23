@@ -26,9 +26,9 @@ transcripio/
   app.py                         Streamlit UI
   requirements.txt               single dependency list
   settings.json                  default app settings
-  setup.bat                      Windows setup script for .venv
-  run.bat                        Windows app launcher
-  install_gpu_runtime.bat        optional NVIDIA CUDA runtime installer
+  scripts/setup.bat              Windows setup script for .venv
+  scripts/run.bat                Windows app launcher
+  scripts/install_gpu_runtime.bat optional NVIDIA CUDA runtime installer
   scripts/prepare_pyannote.py    helper for downloading a local pyannote pipeline
   src/transcripio/
     config.py                    app configuration
@@ -78,7 +78,7 @@ the check again.
 From the repository root:
 
 ```powershell
-.\setup.bat
+.\scripts\setup.bat
 ```
 
 The script does all of this:
@@ -91,7 +91,7 @@ The script does all of this:
 Then launch the app:
 
 ```powershell
-.\run.bat
+.\scripts\run.bat
 ```
 
 Open the local URL printed by Streamlit, usually:
@@ -102,7 +102,7 @@ http://localhost:8501
 
 ## Manual Setup
 
-Use these commands if you do not want to run `setup.bat`:
+Use these commands if you do not want to run `scripts\setup.bat`:
 
 ```powershell
 python -m venv .venv
@@ -123,7 +123,7 @@ Streamlit automatically.
 
 ## Using the App
 
-1. Open the app with `run.bat`.
+1. Open the app with `scripts\run.bat`.
 2. In the sidebar, choose the Whisper model:
    - Use a model name such as `tiny`, `base`, `small`, `medium`, or `large-v3`.
    - Or use a local CTranslate2 model path such as `models/whisper-large-v3-ct2`.
@@ -340,7 +340,7 @@ Then choose the provider in the sidebar and generate notes from a completed tran
 
 For fully offline transcription:
 
-1. Install dependencies while online with `.\setup.bat`.
+1. Install dependencies while online with `.\scripts\setup.bat`.
 2. Install `ffmpeg`.
 3. Download or prepare a local CTranslate2 Whisper model.
 4. Optional: download a local pyannote diarization pipeline.
@@ -412,7 +412,7 @@ recommended first transcription setting.
 To use GPU mode, open the CUDA install panel in the sidebar or run:
 
 ```powershell
-.\install_gpu_runtime.bat
+.\scripts\install_gpu_runtime.bat
 ```
 
 This installs official NVIDIA Python packages into `.venv`:
