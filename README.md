@@ -14,10 +14,13 @@ and exports editable results as TXT, SRT, VTT, DOCX, and JSON.
 - Detect local CPU/GPU/RAM/disk capabilities and suggest Fast, Balanced, or Quality
   transcription settings.
 - Download supported faster-whisper models into `models/` for explicit offline use.
+- Guide transcription with glossary prompts, hotwords, word timestamps, and silence
+  quality controls.
 - Use an optional local pyannote diarization pipeline for speaker labels.
 - Show per-file and queue-level progress.
 - Check the local environment before processing: ffmpeg, writable output folders,
   local model paths, and CUDA runtime status.
+- Benchmark current local Whisper settings on a short prepared WAV file.
 - Edit transcript segments in the UI before downloading.
 - Generate optional transcript notes with OpenAI-compatible LLM providers.
 - Save transcript history under `data/history/`.
@@ -144,14 +147,19 @@ Streamlit automatically.
    - `int8` is a good CPU default.
    - `float16` is commonly used on GPU.
 6. Set the language code, for example `en` or `ru`. Leave it empty for auto-detection.
-7. Keep **Assign speakers** off for the fastest first transcription.
-8. Upload one or more audio/video files.
-9. Optional: open **Environment check** in the sidebar and click **Run checks**.
-10. Click **Process queue**.
-11. Select a completed transcript from the queue results.
-12. Edit speaker labels or transcript text in the segment table.
-13. Optionally generate LLM notes from the edited transcript.
-14. Download TXT, SRT, VTT, DOCX, JSON, or generated notes.
+7. Optional: open **Quality controls** and add glossary terms, names, hotwords, or
+   enable word timestamps.
+8. Keep **Assign speakers** off for the fastest first transcription.
+9. Upload one or more audio/video files.
+10. Optional: open **Environment check** in the sidebar and click **Run checks**.
+11. Optional: open **Benchmark** after one file has been processed to measure current
+    settings on a short local WAV.
+12. Click **Process queue**.
+13. Select a completed transcript from the queue results.
+14. Edit speaker labels or transcript text in the segment table while listening to the
+    prepared audio player.
+15. Optionally generate LLM notes from the edited transcript.
+16. Download TXT, SRT, VTT, DOCX, JSON, Words CSV, or generated notes.
 
 ## Supported Input Formats
 
@@ -237,6 +245,30 @@ CUDA-capable NVIDIA GPUs when available. Its Fast, Balanced, and Quality presets
 model, device, compute type, batching, and decoding settings based on the local machine
 and downloaded model cache. Presets are starting points: you can still override every
 setting before processing.
+
+## Quality Controls
+
+The sidebar **Quality controls** panel passes additional local options to
+`faster-whisper`:
+
+- **Glossary / initial prompt**: names, products, acronyms, and domain context.
+- **Hotwords**: important words to bias recognition toward when supported by the model.
+- **Word timestamps**: stores word-level timing and probability in JSON and Words CSV.
+- **Use previous text as context**: improves continuity in long speech, but can carry a
+  bad phrase forward.
+- **No-speech threshold**, **language detection threshold**, and **hallucination silence
+  guard**: tune silence handling and repeated-text hallucination behavior.
+
+If you edit a segment's text manually, Transcripio clears that segment's word timings so
+exports do not contain stale word-level timestamps.
+
+## Benchmark
+
+The sidebar **Benchmark** panel uses the current Whisper settings and the smallest
+prepared WAV file under `data/output/`. It creates a short temporary clip and reports
+elapsed time, detected language, segment count, and speed as `x realtime`. This is a
+quick way to compare presets or models on the current computer without changing saved
+transcripts.
 
 ## Local pyannote Speaker Diarization
 

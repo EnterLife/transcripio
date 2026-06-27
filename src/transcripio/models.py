@@ -5,11 +5,20 @@ from pathlib import Path
 
 
 @dataclass(slots=True)
+class TranscriptWord:
+    start: float
+    end: float
+    text: str
+    probability: float | None = None
+
+
+@dataclass(slots=True)
 class TranscriptSegment:
     start: float
     end: float
     text: str
     speaker: str | None = None
+    words: list[TranscriptWord] = field(default_factory=list)
 
 
 @dataclass(slots=True)

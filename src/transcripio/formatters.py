@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from io import BytesIO
+from io import BytesIO, StringIO
+import csv
 
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio.storage import result_to_dict
@@ -46,6 +47,30 @@ def to_vtt(segments: list[TranscriptSegment]) -> str:
         )
         blocks.append("")
     return "\n".join(blocks).strip() + "\n"
+
+
+def to_words_csv(segments: list[TranscriptSegment]) -> str:
+    rows: list[list[str]] = [
+        ["segment_start", "segment_end", "speaker", "word_start", "word_end", "word", "probability"]
+    ]
+    for segment in segments:
+        for word in segment.words:
+            rows.append(
+                [
+                    f"{segment.start:.3f}",
+                    f"{segment.end:.3f}",
+                    segment.speaker or "",
+                    f"{word.start:.3f}",
+                    f"{word.end:.3f}",
+                    word.text,
+                    "" if word.probability is None else f"{word.probability:.4f}",
+                ]
+            )
+
+    string_buffer = StringIO()
+    writer = csv.writer(string_buffer, lineterminator="\n")
+    writer.writerows(rows)
+    return string_buffer.getvalue()
 
 
 def to_docx(result: TranscriptionResult) -> bytes:

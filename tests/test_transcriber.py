@@ -97,3 +97,56 @@ def test_batched_transcribe_passes_batch_size(monkeypatch, tmp_path: Path) -> No
     assert captured_options["batch_size"] == 12
     assert captured_options["beam_size"] == 1
     assert captured_options["best_of"] == 1
+
+
+def test_transcribe_passes_quality_options_and_collects_words(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    transcriber = WhisperTranscriber(
+        AppConfig(
+            initial_prompt="Names: Transcripio, Pavel.",
+            hotwords="Transcripio Pavel",
+            word_timestamps=True,
+            condition_on_previous_text=False,
+            no_speech_threshold=0.4,
+            language_detection_threshold=0.7,
+            hallucination_silence_threshold=1.5,
+        )
+    )
+    captured_options = {}
+
+    class FakeWord:
+        start = 0.0
+        end = 0.5
+        word = " hello"
+        probability = 0.9
+
+    class FakeSegment:
+        start = 0.0
+        end = 0.5
+        text = " hello"
+        words = [FakeWord()]
+
+    class FakeInfo:
+        duration = 1.0
+        language = "en"
+
+    class FakeModel:
+        def transcribe(self, _audio_path, **options):
+            captured_options.update(options)
+            return iter([FakeSegment()]), FakeInfo()
+
+    monkeypatch.setattr(transcriber, "_load_model", lambda: FakeModel())
+
+    segments, _language, _duration = transcriber.transcribe(tmp_path / "audio.wav")
+
+    assert captured_options["initial_prompt"] == "Names: Transcripio, Pavel."
+    assert captured_options["hotwords"] == "Transcripio Pavel"
+    assert captured_options["word_timestamps"] is True
+    assert captured_options["condition_on_previous_text"] is False
+    assert captured_options["no_speech_threshold"] == 0.4
+    assert captured_options["language_detection_threshold"] == 0.7
+    assert captured_options["hallucination_silence_threshold"] == 1.5
+    assert segments[0].words[0].text == "hello"
+    assert segments[0].words[0].probability == 0.9

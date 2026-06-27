@@ -28,6 +28,13 @@ def test_load_settings_from_json(tmp_path: Path) -> None:
                     "cpu_threads": 4,
                     "num_workers": 2,
                     "vad_filter": False,
+                    "initial_prompt": "Names: Transcripio.",
+                    "hotwords": "Transcripio Pavel",
+                    "word_timestamps": True,
+                    "condition_on_previous_text": False,
+                    "no_speech_threshold": 0.4,
+                    "language_detection_threshold": 0.7,
+                    "hallucination_silence_threshold": 1.5,
                 },
                 "storage": {
                     "output_dir": "tmp/output",
@@ -68,6 +75,13 @@ def test_load_settings_from_json(tmp_path: Path) -> None:
     assert settings.config.cpu_threads == 4
     assert settings.config.num_workers == 2
     assert settings.config.vad_filter is False
+    assert settings.config.initial_prompt == "Names: Transcripio."
+    assert settings.config.hotwords == "Transcripio Pavel"
+    assert settings.config.word_timestamps is True
+    assert settings.config.condition_on_previous_text is False
+    assert settings.config.no_speech_threshold == 0.4
+    assert settings.config.language_detection_threshold == 0.7
+    assert settings.config.hallucination_silence_threshold == 1.5
     assert settings.config.output_dir == Path("tmp/output")
     assert settings.config.history_dir == Path("tmp/history")
     assert settings.default_llm_provider == "LM Studio"

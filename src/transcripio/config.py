@@ -47,6 +47,13 @@ class AppConfig:
     cpu_threads: int = 0
     num_workers: int = 1
     vad_filter: bool = True
+    initial_prompt: str | None = None
+    hotwords: str | None = None
+    word_timestamps: bool = False
+    condition_on_previous_text: bool = True
+    no_speech_threshold: float = 0.6
+    language_detection_threshold: float = 0.5
+    hallucination_silence_threshold: float | None = None
 
 
 @dataclass(slots=True)
@@ -187,6 +194,38 @@ def load_settings(path: Path = SETTINGS_PATH) -> AppSettings:
             transcription_settings.get("vad_filter"),
             default_config.vad_filter,
         ),
+        initial_prompt=_optional_text(
+            transcription_settings.get("initial_prompt"),
+            default_config.initial_prompt,
+        ),
+        hotwords=_optional_text(
+            transcription_settings.get("hotwords"),
+            default_config.hotwords,
+        ),
+        word_timestamps=_bool(
+            transcription_settings.get("word_timestamps"),
+            default_config.word_timestamps,
+        ),
+        condition_on_previous_text=_bool(
+            transcription_settings.get("condition_on_previous_text"),
+            default_config.condition_on_previous_text,
+        ),
+        no_speech_threshold=_bounded_float(
+            transcription_settings.get("no_speech_threshold"),
+            default_config.no_speech_threshold,
+            minimum=0.0,
+            maximum=1.0,
+        ),
+        language_detection_threshold=_bounded_float(
+            transcription_settings.get("language_detection_threshold"),
+            default_config.language_detection_threshold,
+            minimum=0.0,
+            maximum=1.0,
+        ),
+        hallucination_silence_threshold=_optional_non_negative_float(
+            transcription_settings.get("hallucination_silence_threshold"),
+            default_config.hallucination_silence_threshold,
+        ),
     )
 
     defaults = AppSettings()
@@ -267,6 +306,29 @@ def _non_negative_float(value: Any, default: float) -> float:
     except (TypeError, ValueError):
         return default
     return parsed if parsed >= 0 else default
+
+
+def _optional_non_negative_float(value: Any, default: float | None) -> float | None:
+    if value is None:
+        return default
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = float(text)
+    except ValueError:
+        return default
+    return parsed if parsed >= 0 else default
+
+
+def _bounded_float(value: Any, default: float, minimum: float, maximum: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    if parsed < minimum or parsed > maximum:
+        return default
+    return parsed
 
 
 def _upload_types(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:

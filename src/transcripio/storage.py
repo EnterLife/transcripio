@@ -5,7 +5,7 @@ from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
 
-from transcripio.models import TranscriptSegment, TranscriptionResult
+from transcripio.models import TranscriptSegment, TranscriptWord, TranscriptionResult
 
 
 class StorageError(RuntimeError):
@@ -35,6 +35,19 @@ def result_from_dict(payload: dict) -> TranscriptionResult:
                     end=float(segment["end"]),
                     text=str(segment["text"]),
                     speaker=segment.get("speaker"),
+                    words=[
+                        TranscriptWord(
+                            start=float(word["start"]),
+                            end=float(word["end"]),
+                            text=str(word["text"]),
+                            probability=(
+                                float(word["probability"])
+                                if word.get("probability") is not None
+                                else None
+                            ),
+                        )
+                        for word in segment.get("words", [])
+                    ],
                 )
                 for segment in payload.get("segments", [])
             ],

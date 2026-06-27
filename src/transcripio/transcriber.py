@@ -6,7 +6,7 @@ from pathlib import Path
 
 from transcripio.config import AppConfig
 from transcripio.cuda_runtime import configure_cuda_dll_paths, install_cuda_runtime_packages
-from transcripio.models import TranscriptSegment
+from transcripio.models import TranscriptSegment, TranscriptWord
 
 SegmentProgressCallback = Callable[[TranscriptSegment, float | None], None]
 
@@ -91,7 +91,19 @@ class WhisperTranscriber:
             "vad_filter": self._config.vad_filter,
             "beam_size": self._config.beam_size,
             "best_of": self._config.best_of,
+            "word_timestamps": self._config.word_timestamps,
+            "condition_on_previous_text": self._config.condition_on_previous_text,
+            "no_speech_threshold": self._config.no_speech_threshold,
+            "language_detection_threshold": self._config.language_detection_threshold,
         }
+        if self._config.initial_prompt:
+            transcribe_options["initial_prompt"] = self._config.initial_prompt
+        if self._config.hotwords:
+            transcribe_options["hotwords"] = self._config.hotwords
+        if self._config.hallucination_silence_threshold is not None:
+            transcribe_options["hallucination_silence_threshold"] = (
+                self._config.hallucination_silence_threshold
+            )
         if self._config.use_batched_inference:
             transcribe_options["batch_size"] = self._config.batch_size
 
@@ -100,7 +112,21 @@ class WhisperTranscriber:
         duration = getattr(info, "duration", None)
         segments: list[TranscriptSegment] = []
         for item in segments_iter:
-            segment = TranscriptSegment(start=item.start, end=item.end, text=item.text.strip())
+            words = [
+                TranscriptWord(
+                    start=float(word.start),
+                    end=float(word.end),
+                    text=str(word.word).strip(),
+                    probability=getattr(word, "probability", None),
+                )
+                for word in getattr(item, "words", []) or []
+            ]
+            segment = TranscriptSegment(
+                start=item.start,
+                end=item.end,
+                text=item.text.strip(),
+                words=words,
+            )
             segments.append(segment)
             if on_segment:
                 ratio = min(segment.end / duration, 1.0) if duration else None

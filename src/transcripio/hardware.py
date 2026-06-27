@@ -73,6 +73,13 @@ class TranscriptionRecommendation:
             cpu_threads=self.cpu_threads,
             num_workers=self.num_workers,
             vad_filter=self.vad_filter,
+            initial_prompt=config.initial_prompt,
+            hotwords=config.hotwords,
+            word_timestamps=config.word_timestamps,
+            condition_on_previous_text=config.condition_on_previous_text,
+            no_speech_threshold=config.no_speech_threshold,
+            language_detection_threshold=config.language_detection_threshold,
+            hallucination_silence_threshold=config.hallucination_silence_threshold,
         )
 
 

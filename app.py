@@ -16,6 +16,7 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+from transcripio.benchmark import find_benchmark_audio, run_transcription_benchmark
 from transcripio.config import AppConfig, AppSettings, LlmProviderConfig, load_settings
 from transcripio.cuda_runtime import (
     CUDA_RUNTIME_PACKAGES,
@@ -28,7 +29,7 @@ from transcripio.diarization_setup import (
     download_diarization_pipeline,
     required_access_repos,
 )
-from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt
+from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt, to_words_csv
 from transcripio.hardware import (
     HardwareProfile,
     TranscriptionRecommendation,
@@ -119,6 +120,9 @@ def _show_result_editor(
         }
         for segment in result.segments
     ]
+    if result.audio_path.exists():
+        st.audio(str(result.audio_path))
+
     edited_rows = st.data_editor(
         rows,
         key=f"{editor_key_prefix}-segments-{result.job_id}",
@@ -133,15 +137,24 @@ def _show_result_editor(
         },
     )
 
-    result.segments = [
-        TranscriptSegment(
-            start=float(row["start"]),
-            end=float(row["end"]),
-            speaker=(str(row["speaker"]).strip() or None),
-            text=str(row["text"]).strip(),
+    updated_segments: list[TranscriptSegment] = []
+    for index, row in enumerate(edited_rows):
+        text = str(row["text"]).strip()
+        previous_segment = result.segments[index] if index < len(result.segments) else None
+        updated_segments.append(
+            TranscriptSegment(
+                start=float(row["start"]),
+                end=float(row["end"]),
+                speaker=(str(row["speaker"]).strip() or None),
+                text=text,
+                words=(
+                    previous_segment.words
+                    if previous_segment is not None and text == previous_segment.text
+                    else []
+                ),
+            )
         )
-        for row in edited_rows
-    ]
+    result.segments = updated_segments
     save_result(result, history_dir)
 
     preview = to_txt(result.segments)
@@ -160,8 +173,9 @@ def _show_result_editor(
     vtt = to_vtt(result.segments)
     json_text = to_json(result)
     docx = to_docx(result)
+    words_csv = to_words_csv(result.segments)
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     col1.download_button(
         "TXT",
         txt,
@@ -196,6 +210,14 @@ def _show_result_editor(
         file_name=f"{base_name}.json",
         mime="application/json",
         key=f"{editor_key_prefix}-download-json-{result.job_id}",
+    )
+    col6.download_button(
+        "Words CSV",
+        words_csv,
+        file_name=f"{base_name}-words.csv",
+        mime="text/csv",
+        key=f"{editor_key_prefix}-download-words-{result.job_id}",
+        disabled=not any(segment.words for segment in result.segments),
     )
 
     audio_download = _extracted_audio_download(result)
@@ -433,6 +455,51 @@ def _show_environment_checks(config: AppConfig) -> None:
                     st.warning(message)
                 else:
                     st.error(message)
+
+
+def _show_benchmark_controls(config: AppConfig) -> None:
+    with st.expander("Benchmark"):
+        st.caption("Runs current Whisper settings on a short local WAV from data/output.")
+        benchmark_audio = find_benchmark_audio(config.output_dir)
+        if benchmark_audio is None:
+            st.caption("No prepared WAV files found yet. Process one file first.")
+            return
+
+        seconds = st.slider(
+            "Benchmark seconds",
+            min_value=5,
+            max_value=60,
+            value=15,
+            step=5,
+        )
+        st.caption(f"Source: {benchmark_audio.name}")
+        if st.button("Run benchmark", width="stretch"):
+            try:
+                with tempfile.TemporaryDirectory(prefix="transcripio-benchmark-") as tmp_dir:
+                    with st.spinner("Benchmarking local transcription"):
+                        result = run_transcription_benchmark(
+                            config,
+                            benchmark_audio,
+                            Path(tmp_dir),
+                            seconds=seconds,
+                        )
+            except Exception as exc:  # noqa: BLE001 - Streamlit should show a clean error.
+                st.error(str(exc))
+            else:
+                speed = (
+                    f"{result.realtime_factor:.2f}x realtime"
+                    if result.realtime_factor is not None
+                    else "speed unknown"
+                )
+                duration = (
+                    f"{result.audio_duration:.1f}s audio"
+                    if result.audio_duration is not None
+                    else "unknown duration"
+                )
+                st.success(
+                    f"{speed}; {duration}; {result.elapsed_seconds:.1f}s elapsed; "
+                    f"{result.segment_count} segments; language {result.language or 'unknown'}."
+                )
 
 
 def _select_tuning_profile(
@@ -688,6 +755,59 @@ def main() -> None:
             value=active_config.language or "",
             help="Leave empty for auto-detection.",
         )
+        with st.expander("Quality controls"):
+            initial_prompt = st.text_area(
+                "Glossary / initial prompt",
+                value=active_config.initial_prompt or "",
+                height=100,
+                help="Names, terms, product words, and context that should guide Whisper.",
+            )
+            hotwords = st.text_area(
+                "Hotwords",
+                value=active_config.hotwords or "",
+                height=80,
+                help="Important words to bias recognition toward when supported by the selected model.",
+            )
+            word_timestamps = st.checkbox(
+                "Word timestamps",
+                value=active_config.word_timestamps,
+                help="Adds word-level timings to JSON and Words CSV exports. This can slow transcription.",
+            )
+            condition_on_previous_text = st.checkbox(
+                "Use previous text as context",
+                value=active_config.condition_on_previous_text,
+                help="Improves continuity on long speech, but can carry mistakes forward.",
+            )
+            no_speech_threshold = st.slider(
+                "No-speech threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=float(active_config.no_speech_threshold),
+                step=0.05,
+                help="Higher values skip more likely silence.",
+            )
+            language_detection_threshold = st.slider(
+                "Language detection threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=float(active_config.language_detection_threshold),
+                step=0.05,
+                help="Confidence threshold for auto language detection.",
+            )
+            use_hallucination_guard = st.checkbox(
+                "Hallucination silence guard",
+                value=active_config.hallucination_silence_threshold is not None,
+                help="Helps cut off repeated hallucinated text around silence.",
+            )
+            hallucination_silence_threshold = None
+            if use_hallucination_guard:
+                hallucination_silence_threshold = st.slider(
+                    "Silence guard seconds",
+                    min_value=0.1,
+                    max_value=5.0,
+                    value=float(active_config.hallucination_silence_threshold or 2.0),
+                    step=0.1,
+                )
         use_diarization = st.checkbox(
             "Assign speakers",
             value=bool(active_config.diarization_model_path),
@@ -812,9 +932,17 @@ def main() -> None:
             cpu_threads=cpu_threads,
             num_workers=num_workers,
             vad_filter=vad_filter,
+            initial_prompt=initial_prompt.strip() or None,
+            hotwords=hotwords.strip() or None,
+            word_timestamps=word_timestamps,
+            condition_on_previous_text=condition_on_previous_text,
+            no_speech_threshold=no_speech_threshold,
+            language_detection_threshold=language_detection_threshold,
+            hallucination_silence_threshold=hallucination_silence_threshold,
         )
         st.divider()
         _show_environment_checks(selected_config)
+        _show_benchmark_controls(selected_config)
 
     uploaded_files = st.file_uploader(
         "Add audio or video files",
