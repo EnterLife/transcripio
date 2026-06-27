@@ -21,7 +21,8 @@ and exports editable results as TXT, SRT, VTT, DOCX, and JSON.
 - Check the local environment before processing: ffmpeg, writable output folders,
   local model paths, and CUDA runtime status.
 - Benchmark current local Whisper settings on a short prepared WAV file.
-- Edit transcript segments in the UI before downloading.
+- Edit transcript segments in the UI before downloading, including find/replace,
+  split/merge, and bulk speaker renaming.
 - Generate optional transcript notes with OpenAI-compatible LLM providers.
 - Save transcript history under `data/history/`.
 - Save prepared WAV files under `data/output/`.
@@ -157,7 +158,8 @@ Streamlit automatically.
 12. Click **Process queue**.
 13. Select a completed transcript from the queue results.
 14. Edit speaker labels or transcript text in the segment table while listening to the
-    prepared audio player.
+    prepared audio player. Use **Edit tools** for find/replace, speaker renaming, and
+    split/merge operations.
 15. Optionally generate LLM notes from the edited transcript.
 16. Download TXT, SRT, VTT, DOCX, JSON, Words CSV, or generated notes.
 
@@ -266,9 +268,22 @@ exports do not contain stale word-level timestamps.
 
 The sidebar **Benchmark** panel uses the current Whisper settings and the smallest
 prepared WAV file under `data/output/`. It creates a short temporary clip and reports
-elapsed time, detected language, segment count, and speed as `x realtime`. This is a
-quick way to compare presets or models on the current computer without changing saved
-transcripts.
+elapsed time, detected language, segment count, and speed as `x realtime`. Select one or
+more downloaded/local models in **Compare models** to run the same clip through each
+model and view a side-by-side speed table. This is a quick way to compare presets or
+models on the current computer without changing saved transcripts.
+
+## Editing Tools
+
+Completed transcripts include an **Edit tools** panel above the segment table:
+
+- **Find** locates matching text or speaker labels and shows segment numbers/timestamps.
+- **Replace all** updates matching transcript text and clears stale word timestamps for
+  changed segments.
+- **Rename speaker** applies one speaker name across all matching segments.
+- **Split segment** divides a segment at a chosen timestamp, preserving word timings when
+  available.
+- **Merge segment** combines a segment with the following segment.
 
 ## Local pyannote Speaker Diarization
 

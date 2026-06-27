@@ -16,7 +16,11 @@ SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from transcripio.benchmark import find_benchmark_audio, run_transcription_benchmark
+from transcripio.benchmark import (
+    compare_transcription_configs,
+    find_benchmark_audio,
+    run_transcription_benchmark,
+)
 from transcripio.config import AppConfig, AppSettings, LlmProviderConfig, load_settings
 from transcripio.cuda_runtime import (
     CUDA_RUNTIME_PACKAGES,
@@ -28,6 +32,13 @@ from transcripio.diarization_setup import (
     check_huggingface_diarization_access,
     download_diarization_pipeline,
     required_access_repos,
+)
+from transcripio.editor import (
+    find_segments,
+    merge_segments,
+    rename_speaker,
+    replace_in_segments,
+    split_segment_at,
 )
 from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt, to_words_csv
 from transcripio.hardware import (
@@ -110,6 +121,7 @@ def _show_result_editor(
         st.caption(f"Language: {result.language or 'unknown'}")
 
     speaker_names = _speaker_name_overrides(result, editor_key_prefix)
+    _show_editor_tools(result, history_dir, editor_key_prefix)
 
     rows = [
         {
@@ -231,6 +243,142 @@ def _show_result_editor(
         )
     elif _is_video_source(result):
         st.caption("Extracted audio file is no longer available.")
+
+
+def _show_editor_tools(
+    result: TranscriptionResult,
+    history_dir: Path,
+    editor_key_prefix: str,
+) -> None:
+    with st.expander("Edit tools"):
+        search_col, replace_col = st.columns(2)
+        with search_col:
+            query = st.text_input(
+                "Find",
+                key=f"{editor_key_prefix}-find-{result.job_id}",
+            )
+            matches = find_segments(result.segments, query)
+            if query.strip():
+                if matches:
+                    st.caption(
+                        "Matches: "
+                        + ", ".join(
+                            f"{index + 1} ({result.segments[index].start:.1f}s)"
+                            for index in matches[:12]
+                        )
+                    )
+                else:
+                    st.caption("No matches.")
+        with replace_col:
+            replacement = st.text_input(
+                "Replace with",
+                key=f"{editor_key_prefix}-replace-with-{result.job_id}",
+            )
+            case_sensitive = st.checkbox(
+                "Case-sensitive replace",
+                value=False,
+                key=f"{editor_key_prefix}-replace-case-{result.job_id}",
+            )
+            if st.button(
+                "Replace all",
+                key=f"{editor_key_prefix}-replace-all-{result.job_id}",
+                width="stretch",
+            ):
+                result.segments, count = replace_in_segments(
+                    result.segments,
+                    query,
+                    replacement,
+                    case_sensitive=case_sensitive,
+                )
+                save_result(result, history_dir)
+                st.success(f"Replaced {count} occurrence(s).")
+                st.rerun()
+
+        speaker_labels = sorted({segment.speaker for segment in result.segments if segment.speaker})
+        if speaker_labels:
+            speaker_col, name_col = st.columns(2)
+            with speaker_col:
+                old_speaker = st.selectbox(
+                    "Speaker to rename",
+                    speaker_labels,
+                    key=f"{editor_key_prefix}-bulk-speaker-{result.job_id}",
+                )
+            with name_col:
+                new_speaker = st.text_input(
+                    "New speaker name",
+                    key=f"{editor_key_prefix}-bulk-speaker-name-{result.job_id}",
+                )
+            if st.button(
+                "Rename speaker",
+                key=f"{editor_key_prefix}-bulk-speaker-apply-{result.job_id}",
+                width="stretch",
+            ):
+                result.segments, count = rename_speaker(result.segments, old_speaker, new_speaker)
+                save_result(result, history_dir)
+                st.success(f"Renamed {count} segment(s).")
+                st.rerun()
+
+        if result.segments:
+            segment_labels = [
+                f"{index + 1}: {segment.start:.1f}-{segment.end:.1f}s {segment.text[:48]}"
+                for index, segment in enumerate(result.segments)
+            ]
+            split_col, merge_col = st.columns(2)
+            with split_col:
+                selected_split = st.selectbox(
+                    "Segment to split",
+                    segment_labels,
+                    key=f"{editor_key_prefix}-split-segment-{result.job_id}",
+                )
+                split_index = segment_labels.index(selected_split)
+                split_segment = result.segments[split_index]
+                split_time = st.number_input(
+                    "Split at seconds",
+                    min_value=float(split_segment.start),
+                    max_value=float(split_segment.end),
+                    value=float((split_segment.start + split_segment.end) / 2),
+                    step=0.1,
+                    key=f"{editor_key_prefix}-split-time-{result.job_id}",
+                )
+                if st.button(
+                    "Split segment",
+                    key=f"{editor_key_prefix}-split-apply-{result.job_id}",
+                    width="stretch",
+                ):
+                    try:
+                        result.segments = split_segment_at(
+                            result.segments,
+                            split_index,
+                            float(split_time),
+                        )
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    else:
+                        save_result(result, history_dir)
+                        st.success("Segment split.")
+                        st.rerun()
+            with merge_col:
+                merge_options = segment_labels[:-1]
+                if merge_options:
+                    selected_merge = st.selectbox(
+                        "Merge with next",
+                        merge_options,
+                        key=f"{editor_key_prefix}-merge-segment-{result.job_id}",
+                    )
+                    merge_index = merge_options.index(selected_merge)
+                    if st.button(
+                        "Merge segment",
+                        key=f"{editor_key_prefix}-merge-apply-{result.job_id}",
+                        width="stretch",
+                    ):
+                        try:
+                            result.segments = merge_segments(result.segments, merge_index)
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            save_result(result, history_dir)
+                            st.success("Segments merged.")
+                            st.rerun()
 
 
 def _extracted_audio_download(result: TranscriptionResult) -> AudioDownload | None:
@@ -457,7 +605,10 @@ def _show_environment_checks(config: AppConfig) -> None:
                     st.error(message)
 
 
-def _show_benchmark_controls(config: AppConfig) -> None:
+def _show_benchmark_controls(
+    config: AppConfig,
+    model_options: list[WhisperModelOption],
+) -> None:
     with st.expander("Benchmark"):
         st.caption("Runs current Whisper settings on a short local WAV from data/output.")
         benchmark_audio = find_benchmark_audio(config.output_dir)
@@ -473,32 +624,93 @@ def _show_benchmark_controls(config: AppConfig) -> None:
             step=5,
         )
         st.caption(f"Source: {benchmark_audio.name}")
+        available_models = [option.value for option in model_options if option.is_downloaded]
+        selected_models = st.multiselect(
+            "Compare models",
+            options=available_models,
+            default=[config.whisper_model] if config.whisper_model in available_models else [],
+            help="Select downloaded/local models to compare. Leave empty to benchmark current settings.",
+        )
         if st.button("Run benchmark", width="stretch"):
             try:
                 with tempfile.TemporaryDirectory(prefix="transcripio-benchmark-") as tmp_dir:
                     with st.spinner("Benchmarking local transcription"):
-                        result = run_transcription_benchmark(
-                            config,
-                            benchmark_audio,
-                            Path(tmp_dir),
-                            seconds=seconds,
-                        )
+                        if selected_models:
+                            benchmark_configs = [
+                                (
+                                    model,
+                                    AppConfig(
+                                        whisper_model=model,
+                                        device=config.device,
+                                        compute_type=config.compute_type,
+                                        language=config.language,
+                                        diarization_model_path=None,
+                                        ffmpeg_path=config.ffmpeg_path,
+                                        output_dir=config.output_dir,
+                                        history_dir=config.history_dir,
+                                        local_files_only=True,
+                                        allow_cpu_fallback=config.allow_cpu_fallback,
+                                        auto_install_cuda_runtime=config.auto_install_cuda_runtime,
+                                        use_batched_inference=config.use_batched_inference,
+                                        batch_size=config.batch_size,
+                                        beam_size=config.beam_size,
+                                        best_of=config.best_of,
+                                        cpu_threads=config.cpu_threads,
+                                        num_workers=config.num_workers,
+                                        vad_filter=config.vad_filter,
+                                        initial_prompt=config.initial_prompt,
+                                        hotwords=config.hotwords,
+                                        word_timestamps=config.word_timestamps,
+                                        condition_on_previous_text=config.condition_on_previous_text,
+                                        no_speech_threshold=config.no_speech_threshold,
+                                        language_detection_threshold=(
+                                            config.language_detection_threshold
+                                        ),
+                                        hallucination_silence_threshold=(
+                                            config.hallucination_silence_threshold
+                                        ),
+                                    ),
+                                )
+                                for model in selected_models
+                            ]
+                            comparison = compare_transcription_configs(
+                                benchmark_configs,
+                                benchmark_audio,
+                                Path(tmp_dir),
+                                seconds=seconds,
+                            )
+                        else:
+                            comparison = [
+                                run_transcription_benchmark(
+                                    config,
+                                    benchmark_audio,
+                                    Path(tmp_dir),
+                                    seconds=seconds,
+                                )
+                            ]
             except Exception as exc:  # noqa: BLE001 - Streamlit should show a clean error.
                 st.error(str(exc))
             else:
-                speed = (
-                    f"{result.realtime_factor:.2f}x realtime"
-                    if result.realtime_factor is not None
-                    else "speed unknown"
-                )
-                duration = (
-                    f"{result.audio_duration:.1f}s audio"
-                    if result.audio_duration is not None
-                    else "unknown duration"
-                )
-                st.success(
-                    f"{speed}; {duration}; {result.elapsed_seconds:.1f}s elapsed; "
-                    f"{result.segment_count} segments; language {result.language or 'unknown'}."
+                st.table(
+                    [
+                        {
+                            "Model": result.label or config.whisper_model,
+                            "Speed": (
+                                f"{result.realtime_factor:.2f}x"
+                                if result.realtime_factor is not None
+                                else "unknown"
+                            ),
+                            "Elapsed s": round(result.elapsed_seconds, 2),
+                            "Audio s": (
+                                round(result.audio_duration, 2)
+                                if result.audio_duration is not None
+                                else None
+                            ),
+                            "Segments": result.segment_count,
+                            "Language": result.language or "unknown",
+                        }
+                        for result in comparison
+                    ]
                 )
 
 
@@ -942,7 +1154,7 @@ def main() -> None:
         )
         st.divider()
         _show_environment_checks(selected_config)
-        _show_benchmark_controls(selected_config)
+        _show_benchmark_controls(selected_config, model_options)
 
     uploaded_files = st.file_uploader(
         "Add audio or video files",

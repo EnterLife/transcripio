@@ -18,6 +18,7 @@ class BenchmarkResult:
     realtime_factor: float | None
     language: str | None
     segment_count: int
+    label: str = ""
 
 
 def find_benchmark_audio(output_dir: Path = Path("data/output")) -> Path | None:
@@ -51,6 +52,41 @@ def run_transcription_benchmark(
         language=language,
         segment_count=len(segments),
     )
+
+
+def compare_transcription_configs(
+    configs: list[tuple[str, AppConfig]],
+    source_path: Path,
+    work_dir: Path,
+    seconds: int = 15,
+) -> list[BenchmarkResult]:
+    if not configs:
+        return []
+
+    work_dir.mkdir(parents=True, exist_ok=True)
+    clip_path = work_dir / f"{source_path.stem}.benchmark.wav"
+    _create_benchmark_clip(source_path, clip_path, seconds, configs[0][1].ffmpeg_path)
+
+    results: list[BenchmarkResult] = []
+    for label, config in configs:
+        transcriber = WhisperTranscriber(config)
+        started_at = time.perf_counter()
+        segments, language, duration = transcriber.transcribe(clip_path)
+        elapsed = time.perf_counter() - started_at
+        realtime_factor = (duration / elapsed) if duration and elapsed > 0 else None
+        results.append(
+            BenchmarkResult(
+                source_path=source_path,
+                clip_path=clip_path,
+                elapsed_seconds=elapsed,
+                audio_duration=duration,
+                realtime_factor=realtime_factor,
+                language=language,
+                segment_count=len(segments),
+                label=label,
+            )
+        )
+    return results
 
 
 def _create_benchmark_clip(
