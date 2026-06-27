@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import pytest
+
 from transcripio.models import TranscriptSegment, TranscriptionResult
-from transcripio.storage import load_result, save_result
+from transcripio.storage import StorageError, load_result, save_result
 
 
 def test_save_and_load_result_round_trip(tmp_path: Path) -> None:
@@ -22,3 +24,19 @@ def test_save_and_load_result_round_trip(tmp_path: Path) -> None:
     assert loaded.job_id == "abc123"
     assert loaded.source_name == "call.mp4"
     assert loaded.segments[0].text == "hello"
+
+
+def test_load_result_reports_invalid_json(tmp_path: Path) -> None:
+    path = tmp_path / "broken.json"
+    path.write_text("{not-json", encoding="utf-8")
+
+    with pytest.raises(StorageError, match="invalid JSON"):
+        load_result(path)
+
+
+def test_load_result_reports_unsupported_payload(tmp_path: Path) -> None:
+    path = tmp_path / "broken.json"
+    path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(StorageError, match="JSON object"):
+        load_result(path)

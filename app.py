@@ -35,6 +35,7 @@ from transcripio.hf_token import (
     resolve_hf_token,
     save_hf_token,
 )
+from transcripio.health import run_environment_checks
 from transcripio.model_catalog import (
     WhisperModelOption,
     list_diarization_model_options,
@@ -44,7 +45,7 @@ from transcripio.llm import LlmError, OpenAICompatibleLlm
 from transcripio.media import VIDEO_EXTENSIONS
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio.pipeline import TranscriptionPipeline
-from transcripio.storage import list_history, load_result, save_result
+from transcripio.storage import StorageError, list_history, load_result, save_result
 
 
 @dataclass(frozen=True)
@@ -408,6 +409,20 @@ def _show_hf_token_controls() -> str | None:
     return token_input.strip() or saved_or_env_token
 
 
+def _show_environment_checks(config: AppConfig) -> None:
+    with st.expander("Environment check"):
+        st.caption("Checks the current sidebar settings before running transcription.")
+        if st.button("Run checks", width="stretch"):
+            for check in run_environment_checks(config):
+                message = f"{check.name}: {check.message}"
+                if check.status == "ok":
+                    st.success(message)
+                elif check.status == "warning":
+                    st.warning(message)
+                else:
+                    st.error(message)
+
+
 def main() -> None:
     apply_saved_hf_token()
     settings = load_settings()
@@ -675,6 +690,29 @@ def main() -> None:
         st.header("LLM")
         llm_provider_config = _select_llm_provider(settings)
 
+        selected_config = AppConfig(
+            whisper_model=model_name_or_path.strip() or default_config.whisper_model,
+            device=device,
+            compute_type=compute_type,
+            language=language.strip() or None,
+            diarization_model_path=diarization_model_path.strip() or None,
+            ffmpeg_path=default_config.ffmpeg_path,
+            output_dir=default_config.output_dir,
+            history_dir=default_config.history_dir,
+            local_files_only=local_files_only,
+            allow_cpu_fallback=default_config.allow_cpu_fallback,
+            auto_install_cuda_runtime=auto_install_cuda_runtime,
+            use_batched_inference=use_batched_inference,
+            batch_size=batch_size,
+            beam_size=beam_size,
+            best_of=best_of,
+            cpu_threads=cpu_threads,
+            num_workers=num_workers,
+            vad_filter=vad_filter,
+        )
+        st.divider()
+        _show_environment_checks(selected_config)
+
     uploaded_files = st.file_uploader(
         "Add audio or video files",
         type=list(settings.upload_types),
@@ -703,26 +741,7 @@ def main() -> None:
         )
 
         if run and uploaded_files:
-            config = AppConfig(
-                whisper_model=model_name_or_path.strip() or default_config.whisper_model,
-                device=device,
-                compute_type=compute_type,
-                language=language.strip() or None,
-                diarization_model_path=diarization_model_path.strip() or None,
-                ffmpeg_path=default_config.ffmpeg_path,
-                output_dir=default_config.output_dir,
-                history_dir=default_config.history_dir,
-                local_files_only=local_files_only,
-                allow_cpu_fallback=default_config.allow_cpu_fallback,
-                auto_install_cuda_runtime=auto_install_cuda_runtime,
-                use_batched_inference=use_batched_inference,
-                batch_size=batch_size,
-                beam_size=beam_size,
-                best_of=best_of,
-                cpu_threads=cpu_threads,
-                num_workers=num_workers,
-                vad_filter=vad_filter,
-            )
+            config = selected_config
             pipeline = TranscriptionPipeline(config)
             overall_progress = st.progress(0, text="Starting queue")
 
@@ -751,8 +770,20 @@ def main() -> None:
                 st.success(f"Finished `{uploaded_file.name}`")
 
         if st.session_state.results:
+            results = list(st.session_state.results.values())
+            result_labels = [
+                f"{result.source_name} | {result.created_at[:19]} | {result.job_id[:8]}"
+                for result in results
+            ]
+            selected_result_label = st.selectbox(
+                "Completed transcripts",
+                result_labels,
+                index=len(result_labels) - 1,
+                key="queue-completed-transcript",
+            )
+            selected_result = results[result_labels.index(selected_result_label)]
             _show_result_editor(
-                list(st.session_state.results.values())[-1],
+                selected_result,
                 default_config.history_dir,
                 "queue",
                 llm_provider_config,
@@ -766,14 +797,18 @@ def main() -> None:
             labels = [path.name for path in history_paths]
             selected_history = st.selectbox("Saved transcripts", labels)
             selected_path = history_paths[labels.index(selected_history)]
-            loaded_result = load_result(selected_path)
-            st.session_state.results[loaded_result.job_id] = loaded_result
-            _show_result_editor(
-                loaded_result,
-                default_config.history_dir,
-                "history",
-                llm_provider_config,
-            )
+            try:
+                loaded_result = load_result(selected_path)
+            except StorageError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.results[loaded_result.job_id] = loaded_result
+                _show_result_editor(
+                    loaded_result,
+                    default_config.history_dir,
+                    "history",
+                    llm_provider_config,
+                )
 
 
 if __name__ == "__main__":

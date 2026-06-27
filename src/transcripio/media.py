@@ -19,6 +19,7 @@ def ensure_audio_wav(input_path: Path, work_dir: Path, ffmpeg_path: str = "ffmpe
     if not is_supported_media(input_path):
         raise ValueError(f"Unsupported file format: {input_path.suffix}")
 
+    work_dir.mkdir(parents=True, exist_ok=True)
     output_path = work_dir / f"{input_path.stem}.wav"
     command = [
         ffmpeg_path,

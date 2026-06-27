@@ -13,6 +13,8 @@ and exports editable results as TXT, SRT, VTT, DOCX, and JSON.
 - Use a `faster-whisper` model by model name or by local CTranslate2 model path.
 - Use an optional local pyannote diarization pipeline for speaker labels.
 - Show per-file and queue-level progress.
+- Check the local environment before processing: ffmpeg, writable output folders,
+  local model paths, and CUDA runtime status.
 - Edit transcript segments in the UI before downloading.
 - Generate optional transcript notes with OpenAI-compatible LLM providers.
 - Save transcript history under `data/history/`.
@@ -137,10 +139,12 @@ Streamlit automatically.
 5. Set the language code, for example `en` or `ru`. Leave it empty for auto-detection.
 6. Keep **Assign speakers** off for the fastest first transcription.
 7. Upload one or more audio/video files.
-8. Click **Process queue**.
-9. Edit speaker labels or transcript text in the segment table.
-10. Optionally generate LLM notes from the edited transcript.
-11. Download TXT, SRT, VTT, DOCX, JSON, or generated notes.
+8. Optional: open **Environment check** in the sidebar and click **Run checks**.
+9. Click **Process queue**.
+10. Select a completed transcript from the queue results.
+11. Edit speaker labels or transcript text in the segment table.
+12. Optionally generate LLM notes from the edited transcript.
+13. Download TXT, SRT, VTT, DOCX, JSON, or generated notes.
 
 ## Supported Input Formats
 
@@ -367,6 +371,13 @@ These directories are ignored by git. The History tab reads saved JSON files fro
 
 Default UI, model, ffmpeg, and storage settings live in `settings.json`.
 The sidebar still lets you override model settings for the current run.
+
+## Environment Check
+
+The sidebar **Environment check** panel validates the current run settings without
+starting transcription. It checks that `ffmpeg` is callable, output and history folders
+are writable, local model paths exist, and CUDA runtime DLLs are present when CUDA is
+selected. Use it before a long queue or after changing model, storage, or GPU settings.
 
 ## Running Checks
 
