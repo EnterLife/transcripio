@@ -29,6 +29,12 @@ from transcripio.diarization_setup import (
     required_access_repos,
 )
 from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt
+from transcripio.hardware import (
+    HardwareProfile,
+    TranscriptionRecommendation,
+    detect_hardware_profile,
+    recommend_transcription_profiles,
+)
 from transcripio.hf_token import (
     apply_saved_hf_token,
     clear_saved_hf_token,
@@ -38,6 +44,7 @@ from transcripio.hf_token import (
 from transcripio.health import run_environment_checks
 from transcripio.model_catalog import (
     WhisperModelOption,
+    discover_cached_hf_model_repos,
     list_diarization_model_options,
     list_whisper_model_options,
 )
@@ -46,6 +53,11 @@ from transcripio.media import VIDEO_EXTENSIONS
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio.pipeline import TranscriptionPipeline
 from transcripio.storage import StorageError, list_history, load_result, save_result
+from transcripio.whisper_setup import (
+    DEFAULT_WHISPER_DOWNLOADS,
+    default_whisper_output_dir,
+    download_whisper_model,
+)
 
 
 @dataclass(frozen=True)
@@ -423,10 +435,53 @@ def _show_environment_checks(config: AppConfig) -> None:
                     st.error(message)
 
 
+def _select_tuning_profile(
+    hardware: HardwareProfile,
+    profiles: tuple[TranscriptionRecommendation, ...],
+) -> TranscriptionRecommendation | None:
+    with st.expander("Computer profile", expanded=True):
+        memory = f"{hardware.memory_total_mb} MB RAM" if hardware.memory_total_mb else "RAM unknown"
+        st.caption(
+            f"CPU cores: {hardware.cpu_count} | {memory} | Free disk: {hardware.disk_free_mb} MB"
+        )
+        if hardware.gpus:
+            for gpu in hardware.gpus:
+                gpu_memory = (
+                    f", {gpu.memory_total_mb} MB VRAM" if gpu.memory_total_mb is not None else ""
+                )
+                st.caption(f"GPU: {gpu.name}{gpu_memory}")
+        else:
+            st.caption("GPU: no CUDA-capable GPU detected.")
+
+        profile_labels = ["Manual settings"] + [profile.name for profile in profiles]
+        selected_label = st.selectbox(
+            "Tuning preset",
+            options=profile_labels,
+            help="Auto presets choose model, device, compute type, and decoding settings.",
+        )
+        if selected_label == "Manual settings":
+            return None
+
+        selected_profile = profiles[profile_labels.index(selected_label) - 1]
+        st.caption(
+            f"{selected_profile.description} Model: {selected_profile.whisper_model}; "
+            f"{selected_profile.device}/{selected_profile.compute_type}; "
+            f"beam {selected_profile.beam_size}; batch {selected_profile.batch_size}."
+        )
+        if selected_profile.local_files_only:
+            st.caption("The recommended model appears to be available locally.")
+        else:
+            st.warning("The recommended model may need to be downloaded before offline use.")
+        return selected_profile
+
+
 def main() -> None:
     apply_saved_hf_token()
     settings = load_settings()
     default_config = settings.config
+    cached_whisper_repos = discover_cached_hf_model_repos()
+    hardware_profile = detect_hardware_profile(default_config.output_dir)
+    tuning_profiles = recommend_transcription_profiles(hardware_profile, cached_whisper_repos)
     model_options = list_whisper_model_options(settings.whisper_models)
     diarization_options = list_diarization_model_options()
 
@@ -438,12 +493,27 @@ def main() -> None:
 
     if "results" not in st.session_state:
         st.session_state.results = {}
+    last_downloaded_whisper_model = st.session_state.get("last_downloaded_whisper_model")
+    if last_downloaded_whisper_model and Path(last_downloaded_whisper_model).exists():
+        if all(option.value != last_downloaded_whisper_model for option in model_options):
+            model_options.append(
+                WhisperModelOption(
+                    label=f"{Path(last_downloaded_whisper_model).name} (local)",
+                    value=last_downloaded_whisper_model,
+                    source="local",
+                    is_downloaded=True,
+                )
+            )
 
     with st.sidebar:
         hf_token = _show_hf_token_controls()
         st.divider()
+        st.header("Computer")
+        selected_profile = _select_tuning_profile(hardware_profile, tuning_profiles)
+        active_config = selected_profile.apply_to(default_config) if selected_profile else default_config
+        st.divider()
         st.header("Models")
-        selected_default = _selected_model_option(model_options, default_config.whisper_model)
+        selected_default = _selected_model_option(model_options, active_config.whisper_model)
         model_labels = [option.label for option in model_options] + ["Custom name or path"]
         selected_model_label = st.selectbox(
             "Whisper model",
@@ -454,7 +524,7 @@ def main() -> None:
             selected_model_option = None
             model_name_or_path = st.text_input(
                 "Model name or local path",
-                value=default_config.whisper_model,
+                value=active_config.whisper_model,
                 help="Use a faster-whisper model name, HF repo ID, or local CTranslate2 directory.",
             )
         else:
@@ -467,7 +537,40 @@ def main() -> None:
             else:
                 st.caption("This model can be downloaded by faster-whisper on first use.")
 
-        local_files_default = default_config.local_files_only
+        with st.expander("Download Whisper model"):
+            st.caption("Downloads a faster-whisper CTranslate2 model into models/ for offline use.")
+            whisper_download_label = st.selectbox(
+                "Model to download",
+                options=list(DEFAULT_WHISPER_DOWNLOADS) + ["Custom repo"],
+            )
+            if whisper_download_label == "Custom repo":
+                whisper_download_repo = st.text_input(
+                    "Custom Hugging Face repo",
+                    value=model_name_or_path,
+                )
+            else:
+                whisper_download_repo = whisper_download_label
+            whisper_output_dir = st.text_input(
+                "Save to",
+                value=str(default_whisper_output_dir(whisper_download_repo)),
+                help="Use the downloaded local path as the Whisper model.",
+            )
+            if st.button("Download Whisper model", width="stretch"):
+                try:
+                    with st.spinner("Downloading local Whisper model"):
+                        download_result = download_whisper_model(
+                            whisper_download_repo,
+                            output_dir=Path(whisper_output_dir),
+                            token=hf_token,
+                        )
+                except Exception as exc:  # noqa: BLE001 - Streamlit should show a clean error.
+                    st.error(str(exc))
+                else:
+                    st.session_state.last_downloaded_whisper_model = str(download_result.model_path)
+                    st.success(f"Downloaded: {download_result.model_path}")
+                    st.caption("Reload the page to select this local model from the list.")
+
+        local_files_default = active_config.local_files_only
         if selected_model_option and selected_model_option.is_downloaded:
             local_files_default = True
         local_files_only = st.checkbox(
@@ -480,7 +583,7 @@ def main() -> None:
         device = st.selectbox(
             "Device",
             options=device_options,
-            index=_selected_index(device_options, default_config.device),
+            index=_selected_index(device_options, active_config.device),
         )
         if device == "cuda":
             cuda_status = configure_cuda_dll_paths()
@@ -506,13 +609,13 @@ def main() -> None:
                             st.error(f"Could not install GPU runtime packages: {details}")
             auto_install_cuda_runtime = st.checkbox(
                 "Auto-install missing GPU runtime before transcription",
-                value=default_config.auto_install_cuda_runtime,
+                value=active_config.auto_install_cuda_runtime,
                 help="Downloads official NVIDIA pip packages only when CUDA is selected and DLLs are missing.",
             )
         else:
             auto_install_cuda_runtime = False
         compute_type_options = ["int8", "float16", "float32"]
-        default_compute_type = default_config.compute_type
+        default_compute_type = active_config.compute_type
         if device == "cuda" and default_compute_type == "int8":
             default_compute_type = "float16"
         compute_type = st.selectbox(
@@ -522,16 +625,16 @@ def main() -> None:
             help="Use int8 for most CPU runs and float16 for many GPU runs.",
         )
         use_batched_inference = False
-        batch_size = default_config.batch_size
-        beam_size = default_config.beam_size
-        best_of = default_config.best_of
-        cpu_threads = default_config.cpu_threads
-        num_workers = default_config.num_workers
-        vad_filter = default_config.vad_filter
+        batch_size = active_config.batch_size
+        beam_size = active_config.beam_size
+        best_of = active_config.best_of
+        cpu_threads = active_config.cpu_threads
+        num_workers = active_config.num_workers
+        vad_filter = active_config.vad_filter
         with st.expander("Performance"):
             use_batched_inference = st.checkbox(
                 "Batched inference",
-                value=device == "cuda" or default_config.use_batched_inference,
+                value=active_config.use_batched_inference,
                 help="Improves GPU utilization by decoding multiple chunks together.",
             )
             if use_batched_inference:
@@ -539,7 +642,7 @@ def main() -> None:
                     "Batch size",
                     min_value=1,
                     max_value=32,
-                    value=default_config.batch_size,
+                    value=batch_size,
                     step=1,
                     help="Higher values load the GPU more but require more VRAM.",
                 )
@@ -547,7 +650,7 @@ def main() -> None:
                 "Beam size",
                 min_value=1,
                 max_value=8,
-                value=default_config.beam_size,
+                value=beam_size,
                 step=1,
                 help="1 is fastest. Higher values may improve quality but slow decoding.",
             )
@@ -555,20 +658,20 @@ def main() -> None:
                 "Best of",
                 min_value=1,
                 max_value=8,
-                value=default_config.best_of,
+                value=best_of,
                 step=1,
                 help="1 is fastest. Higher values do extra candidate decoding.",
             )
             vad_filter = st.checkbox(
                 "Skip silence",
-                value=default_config.vad_filter,
+                value=vad_filter,
                 help="Filters silence before transcription. Usually faster for recordings with pauses.",
             )
             cpu_threads = st.number_input(
                 "CPU threads",
                 min_value=0,
                 max_value=64,
-                value=default_config.cpu_threads,
+                value=cpu_threads,
                 step=1,
                 help="0 lets CTranslate2 choose automatically.",
             )
@@ -576,18 +679,18 @@ def main() -> None:
                 "Workers",
                 min_value=1,
                 max_value=8,
-                value=default_config.num_workers,
+                value=num_workers,
                 step=1,
                 help="More workers can improve throughput for queued files, but uses more memory.",
             )
         language = st.text_input(
             "Language",
-            value=default_config.language or "",
+            value=active_config.language or "",
             help="Leave empty for auto-detection.",
         )
         use_diarization = st.checkbox(
             "Assign speakers",
-            value=bool(default_config.diarization_model_path),
+            value=bool(active_config.diarization_model_path),
             help="Keep this off for the fastest first transcription.",
         )
         if use_diarization:
@@ -655,7 +758,7 @@ def main() -> None:
                         st.error(f"Could not download diarization model: {exc}")
                     else:
                         diarization_options = list_diarization_model_options()
-                        default_config.diarization_model_path = str(download_result.config_path)
+                        active_config.diarization_model_path = str(download_result.config_path)
                         st.success(f"Downloaded: {download_result.config_path}")
 
             diarization_labels = [option.label for option in diarization_options] + [
@@ -665,7 +768,7 @@ def main() -> None:
                 st.caption("No local diarization config.yaml found under models/.")
             default_diarization_label = "Custom path"
             for option in diarization_options:
-                if option.value == default_config.diarization_model_path:
+                if option.value == active_config.diarization_model_path:
                     default_diarization_label = option.label
                     break
 
@@ -677,7 +780,7 @@ def main() -> None:
             if selected_diarization_label == "Custom path":
                 diarization_model_path = st.text_input(
                     "Local diarization pipeline path",
-                    value=default_config.diarization_model_path or "",
+                    value=active_config.diarization_model_path or "",
                     help="Example: models/pyannote-speaker-diarization/config.yaml",
                 )
             else:
@@ -696,11 +799,11 @@ def main() -> None:
             compute_type=compute_type,
             language=language.strip() or None,
             diarization_model_path=diarization_model_path.strip() or None,
-            ffmpeg_path=default_config.ffmpeg_path,
-            output_dir=default_config.output_dir,
-            history_dir=default_config.history_dir,
+            ffmpeg_path=active_config.ffmpeg_path,
+            output_dir=active_config.output_dir,
+            history_dir=active_config.history_dir,
             local_files_only=local_files_only,
-            allow_cpu_fallback=default_config.allow_cpu_fallback,
+            allow_cpu_fallback=active_config.allow_cpu_fallback,
             auto_install_cuda_runtime=auto_install_cuda_runtime,
             use_batched_inference=use_batched_inference,
             batch_size=batch_size,

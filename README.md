@@ -11,6 +11,9 @@ and exports editable results as TXT, SRT, VTT, DOCX, and JSON.
 - Process files as a simple queue.
 - Extract a mono 16 kHz WAV file before transcription.
 - Use a `faster-whisper` model by model name or by local CTranslate2 model path.
+- Detect local CPU/GPU/RAM/disk capabilities and suggest Fast, Balanced, or Quality
+  transcription settings.
+- Download supported faster-whisper models into `models/` for explicit offline use.
 - Use an optional local pyannote diarization pipeline for speaker labels.
 - Show per-file and queue-level progress.
 - Check the local environment before processing: ffmpeg, writable output folders,
@@ -130,21 +133,25 @@ Streamlit automatically.
    - Use a model name such as `tiny`, `base`, `small`, `medium`, or `large-v3`.
    - Or use a local CTranslate2 model path such as `models/whisper-large-v3-ct2`.
    - Models marked `downloaded` are already present in the Hugging Face cache or `models/`.
-3. Choose the device:
+3. Optional: choose a **Tuning preset** in **Computer profile**:
+   - **Fast** prioritizes throughput.
+   - **Balanced** is the default recommendation for everyday local use.
+   - **Quality** uses stronger/slower decoding settings.
+4. Choose the device:
    - `cpu` works everywhere and is the safest first run.
    - `cuda` requires a correctly installed GPU PyTorch stack.
-4. Choose the compute type:
+5. Choose the compute type:
    - `int8` is a good CPU default.
    - `float16` is commonly used on GPU.
-5. Set the language code, for example `en` or `ru`. Leave it empty for auto-detection.
-6. Keep **Assign speakers** off for the fastest first transcription.
-7. Upload one or more audio/video files.
-8. Optional: open **Environment check** in the sidebar and click **Run checks**.
-9. Click **Process queue**.
-10. Select a completed transcript from the queue results.
-11. Edit speaker labels or transcript text in the segment table.
-12. Optionally generate LLM notes from the edited transcript.
-13. Download TXT, SRT, VTT, DOCX, JSON, or generated notes.
+6. Set the language code, for example `en` or `ru`. Leave it empty for auto-detection.
+7. Keep **Assign speakers** off for the fastest first transcription.
+8. Upload one or more audio/video files.
+9. Optional: open **Environment check** in the sidebar and click **Run checks**.
+10. Click **Process queue**.
+11. Select a completed transcript from the queue results.
+12. Edit speaker labels or transcript text in the segment table.
+13. Optionally generate LLM notes from the edited transcript.
+14. Download TXT, SRT, VTT, DOCX, JSON, or generated notes.
 
 ## Supported Input Formats
 
@@ -189,6 +196,10 @@ cache if they are not already present.
 The sidebar marks cached models as `downloaded`. If a model is already downloaded, keep
 **Use downloaded/local files only** enabled to avoid Hugging Face download checks.
 
+To explicitly prepare a local Whisper model, open **Download Whisper model** in the
+sidebar, choose a faster-whisper repo, and download it into `models/`. After reload, the
+model appears as a local option and can be used with **Use downloaded/local files only**.
+
 ## GPU Performance
 
 Low GPU utilization is normal when transcribing one short file with a small model. Audio
@@ -220,6 +231,12 @@ models/whisper-large-v3-ct2
 
 This is the preferred offline mode. Prepare or download the CTranslate2 model before
 launching the app, then paste the local path into the sidebar.
+
+The sidebar **Computer profile** panel detects CPU cores, RAM, free disk space, and
+CUDA-capable NVIDIA GPUs when available. Its Fast, Balanced, and Quality presets choose
+model, device, compute type, batching, and decoding settings based on the local machine
+and downloaded model cache. Presets are starting points: you can still override every
+setting before processing.
 
 ## Local pyannote Speaker Diarization
 
