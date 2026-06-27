@@ -393,6 +393,20 @@ Run tests:
 .\.venv\Scripts\python.exe -m pytest
 ```
 
+Run opt-in model-backed checks with local cached models and a local WAV file:
+
+```powershell
+$env:TRANSCRIPIO_RUN_MODEL_TESTS="1"
+$env:TRANSCRIPIO_MODEL_TEST_AUDIO="data/output/example.prepared.wav"
+$env:TRANSCRIPIO_WHISPER_MODEL="small"
+$env:TRANSCRIPIO_DIARIZATION_MODEL="models/pyannote-speaker-diarization/config.yaml"
+.\.venv\Scripts\python.exe -m pytest tests\test_model_backed_integration.py
+```
+
+Leave `TRANSCRIPIO_MODEL_TEST_AUDIO` unset to use the smallest WAV found under
+`data/output/`. These checks are skipped during ordinary test runs because they require
+local model weights and local media.
+
 Check imports:
 
 ```powershell
