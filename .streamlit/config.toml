@@ -5,3 +5,10 @@ gatherUsageStats = false
 showEmailPrompt = false
 maxUploadSize = 102400
 maxMessageSize = 102400
+
+[theme]
+base = "dark"
+primaryColor = "#f97316"
+backgroundColor = "#0d0f12"
+secondaryBackgroundColor = "#171a20"
+textColor = "#f4f4f5"

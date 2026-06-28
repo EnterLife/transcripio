@@ -83,12 +83,15 @@ def _inject_status_spinner_css() -> None:
         """
         <style>
         :root {
-            --transcripio-surface: #f7f8fb;
-            --transcripio-border: #d9dee8;
-            --transcripio-muted: #596579;
-            --transcripio-text: #172033;
-            --transcripio-accent: #247a73;
-            --transcripio-focus: #315fbd;
+            --transcripio-surface: #0d0f12;
+            --transcripio-panel: #171a20;
+            --transcripio-panel-strong: #1f242c;
+            --transcripio-border: #303640;
+            --transcripio-muted: #a8afbd;
+            --transcripio-text: #f4f4f5;
+            --transcripio-accent: #f97316;
+            --transcripio-accent-hover: #fb923c;
+            --transcripio-focus: #ffb86b;
         }
 
         .stApp {
@@ -96,8 +99,16 @@ def _inject_status_spinner_css() -> None:
             color: var(--transcripio-text);
         }
 
+        .stApp,
+        .stApp p,
+        .stApp label,
+        .stApp span,
+        .stApp div {
+            color: var(--transcripio-text);
+        }
+
         [data-testid="stSidebar"] {
-            background: #ffffff;
+            background: #101216;
             border-right: 1px solid var(--transcripio-border);
         }
 
@@ -114,11 +125,12 @@ def _inject_status_spinner_css() -> None:
 
         div[data-testid="stVerticalBlockBorderWrapper"] {
             border-color: var(--transcripio-border);
-            box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04);
+            background: var(--transcripio-panel);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
         }
 
         div[data-testid="stMetric"] {
-            background: #ffffff;
+            background: var(--transcripio-panel);
             border: 1px solid var(--transcripio-border);
             border-radius: 8px;
             padding: 0.75rem 0.85rem;
@@ -142,11 +154,27 @@ def _inject_status_spinner_css() -> None:
         .stButton > button[kind="primary"] {
             background: var(--transcripio-accent);
             border-color: var(--transcripio-accent);
+            color: #111111;
+            font-weight: 600;
         }
 
         .stButton > button[kind="primary"]:hover {
-            background: #1e6761;
-            border-color: #1e6761;
+            background: var(--transcripio-accent-hover);
+            border-color: var(--transcripio-accent-hover);
+            color: #111111;
+        }
+
+        .stButton > button,
+        .stDownloadButton > button {
+            background: var(--transcripio-panel-strong);
+            border-color: var(--transcripio-border);
+            color: var(--transcripio-text);
+        }
+
+        .stButton > button:hover,
+        .stDownloadButton > button:hover {
+            border-color: var(--transcripio-accent);
+            color: var(--transcripio-focus);
         }
 
         .stTabs [data-baseweb="tab-list"] {
@@ -161,20 +189,44 @@ def _inject_status_spinner_css() -> None:
         }
 
         .stTabs [aria-selected="true"] {
-            background: #ffffff;
+            background: var(--transcripio-panel);
             color: var(--transcripio-focus);
+            border-bottom: 2px solid var(--transcripio-accent);
         }
 
         div[data-testid="stFileUploader"] section {
-            background: #ffffff;
+            background: var(--transcripio-panel);
             border-color: var(--transcripio-border);
             border-radius: 8px;
+        }
+
+        div[data-testid="stFileUploader"] section button {
+            background: var(--transcripio-panel-strong);
+            border-color: var(--transcripio-border);
+            color: var(--transcripio-text);
+        }
+
+        input,
+        textarea,
+        [data-baseweb="select"] > div,
+        [data-baseweb="input"] > div,
+        [data-baseweb="textarea"] {
+            background-color: var(--transcripio-panel-strong);
+            border-color: var(--transcripio-border);
+            color: var(--transcripio-text);
+        }
+
+        [data-baseweb="popover"],
+        [data-baseweb="menu"] {
+            background: var(--transcripio-panel-strong);
+            color: var(--transcripio-text);
         }
 
         div[data-testid="stDataFrame"],
         div[data-testid="stDataEditor"] {
             border-radius: 8px;
             overflow: hidden;
+            border: 1px solid var(--transcripio-border);
         }
 
         div[data-testid="stStatusWidgetRunningIcon"] svg {
