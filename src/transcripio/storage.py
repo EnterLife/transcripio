@@ -21,39 +21,67 @@ def result_to_dict(result: TranscriptionResult) -> dict:
 
 def result_from_dict(payload: dict) -> TranscriptionResult:
     try:
+        segments_payload = payload.get("segments", [])
+        if not isinstance(segments_payload, list):
+            raise TypeError("segments must be a list")
+
         return TranscriptionResult(
             job_id=str(payload["job_id"]),
             source_name=str(payload["source_name"]),
             source_path=Path(payload["source_path"]),
             audio_path=Path(payload["audio_path"]),
-            language=payload.get("language"),
-            duration=payload.get("duration"),
+            language=_optional_text(payload.get("language")),
+            duration=_optional_float(payload.get("duration")),
             created_at=str(payload["created_at"]),
             segments=[
-                TranscriptSegment(
-                    start=float(segment["start"]),
-                    end=float(segment["end"]),
-                    text=str(segment["text"]),
-                    speaker=segment.get("speaker"),
-                    words=[
-                        TranscriptWord(
-                            start=float(word["start"]),
-                            end=float(word["end"]),
-                            text=str(word["text"]),
-                            probability=(
-                                float(word["probability"])
-                                if word.get("probability") is not None
-                                else None
-                            ),
-                        )
-                        for word in segment.get("words", [])
-                    ],
-                )
-                for segment in payload.get("segments", [])
+                _transcript_segment_from_history(segment)
+                for segment in segments_payload
             ],
         )
-    except (KeyError, TypeError, ValueError) as exc:
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
         raise StorageError("Transcript history file has an unsupported format.") from exc
+
+
+def _transcript_segment_from_history(value: object) -> TranscriptSegment:
+    if not isinstance(value, dict):
+        raise TypeError("history segment must be an object")
+
+    words_payload = value.get("words", [])
+    if not isinstance(words_payload, list):
+        raise TypeError("history segment words must be a list")
+
+    return TranscriptSegment(
+        start=float(value["start"]),
+        end=float(value["end"]),
+        text=str(value["text"]),
+        speaker=_optional_text(value.get("speaker")),
+        words=[_transcript_word_from_history(word) for word in words_payload],
+    )
+
+
+def _transcript_word_from_history(value: object) -> TranscriptWord:
+    if not isinstance(value, dict):
+        raise TypeError("history word must be an object")
+
+    return TranscriptWord(
+        start=float(value["start"]),
+        end=float(value["end"]),
+        text=str(value["text"]),
+        probability=_optional_float(value.get("probability")),
+    )
+
+
+def _optional_text(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None:
+        return None
+    return float(value)
 
 
 def save_result(result: TranscriptionResult, history_dir: Path) -> Path:

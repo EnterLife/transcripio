@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from transcripio.formatters import to_docx, to_srt, to_vtt, to_words_csv
 from transcripio.models import TranscriptSegment, TranscriptWord, TranscriptionResult
 
@@ -43,3 +45,24 @@ def test_words_csv_exports_word_timestamps() -> None:
 
     assert "segment_start,segment_end,speaker,word_start,word_end,word,probability" in csv_text
     assert "0.000,1.000,A,0.100,0.400,hello,0.9100" in csv_text
+
+
+def test_subtitle_export_rejects_negative_timestamps() -> None:
+    segments = [TranscriptSegment(start=-0.1, end=1.0, text="hello")]
+
+    with pytest.raises(ValueError, match="zero or greater"):
+        to_srt(segments)
+
+
+def test_words_csv_rejects_reversed_word_timestamps() -> None:
+    segments = [
+        TranscriptSegment(
+            start=0.0,
+            end=1.0,
+            text="hello",
+            words=[TranscriptWord(start=0.8, end=0.3, text="hello")],
+        )
+    ]
+
+    with pytest.raises(ValueError, match="Word end time"):
+        to_words_csv(segments)

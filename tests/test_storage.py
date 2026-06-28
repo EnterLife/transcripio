@@ -53,6 +53,62 @@ def test_load_result_reports_unsupported_payload(tmp_path: Path) -> None:
         load_result(path)
 
 
+def test_load_result_normalizes_optional_history_values(tmp_path: Path) -> None:
+    path = tmp_path / "history.json"
+    path.write_text(
+        """
+        {
+          "job_id": "abc123",
+          "source_name": "call.mp4",
+          "source_path": "call.mp4",
+          "audio_path": "call.prepared.wav",
+          "language": " en ",
+          "duration": "2.5",
+          "created_at": "2026-05-31T00:00:00+00:00",
+          "segments": [
+            {
+              "start": "0.0",
+              "end": "2.5",
+              "text": "hello",
+              "speaker": " SPEAKER_00 ",
+              "words": [
+                {"start": "0.0", "end": "0.5", "text": "hello", "probability": "0.95"}
+              ]
+            }
+          ]
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    result = load_result(path)
+
+    assert result.language == "en"
+    assert result.duration == 2.5
+    assert result.segments[0].speaker == "SPEAKER_00"
+    assert result.segments[0].words[0].probability == 0.95
+
+
+def test_load_result_reports_non_object_segments(tmp_path: Path) -> None:
+    path = tmp_path / "broken.json"
+    path.write_text(
+        """
+        {
+          "job_id": "abc123",
+          "source_name": "call.mp4",
+          "source_path": "call.mp4",
+          "audio_path": "call.prepared.wav",
+          "created_at": "2026-05-31T00:00:00+00:00",
+          "segments": ["not-object"]
+        }
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(StorageError, match="unsupported format"):
+        load_result(path)
+
+
 def test_save_result_reports_history_directory_errors(tmp_path: Path) -> None:
     history_dir = tmp_path / "history.json"
     history_dir.write_text("not a directory", encoding="utf-8")

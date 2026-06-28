@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from io import BytesIO, StringIO
 import csv
+import math
+from numbers import Real
 
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio.storage import result_to_dict
@@ -12,6 +14,7 @@ import json
 def to_txt(segments: list[TranscriptSegment]) -> str:
     lines: list[str] = []
     for segment in segments:
+        _validate_segment_timestamps(segment)
         prefix = f"{segment.speaker}: " if segment.speaker else ""
         lines.append(f"{_format_time(segment.start)} {_format_time(segment.end)}  {prefix}{segment.text}")
     return "\n".join(lines)
@@ -20,6 +23,7 @@ def to_txt(segments: list[TranscriptSegment]) -> str:
 def to_srt(segments: list[TranscriptSegment]) -> str:
     blocks: list[str] = []
     for index, segment in enumerate(segments, start=1):
+        _validate_segment_timestamps(segment)
         speaker = f"{segment.speaker}: " if segment.speaker else ""
         blocks.append(
             "\n".join(
@@ -36,6 +40,7 @@ def to_srt(segments: list[TranscriptSegment]) -> str:
 def to_vtt(segments: list[TranscriptSegment]) -> str:
     blocks = ["WEBVTT", ""]
     for segment in segments:
+        _validate_segment_timestamps(segment)
         speaker = f"{segment.speaker}: " if segment.speaker else ""
         blocks.append(
             "\n".join(
@@ -54,7 +59,12 @@ def to_words_csv(segments: list[TranscriptSegment]) -> str:
         ["segment_start", "segment_end", "speaker", "word_start", "word_end", "word", "probability"]
     ]
     for segment in segments:
+        _validate_segment_timestamps(segment)
         for word in segment.words:
+            _validate_timestamp(word.start, "word start")
+            _validate_timestamp(word.end, "word end")
+            if word.end < word.start:
+                raise ValueError("Word end time must be greater than or equal to start time.")
             rows.append(
                 [
                     f"{segment.start:.3f}",
@@ -96,6 +106,7 @@ def to_docx(result: TranscriptionResult) -> bytes:
     headers[3].text = "Text"
 
     for segment in result.segments:
+        _validate_segment_timestamps(segment)
         cells = table.add_row().cells
         cells[0].text = _format_plain_time(segment.start)
         cells[1].text = _format_plain_time(segment.end)
@@ -137,8 +148,23 @@ def _format_duration(seconds: float) -> str:
 
 
 def _split_timestamp(seconds: float) -> tuple[int, int, int, int]:
+    _validate_timestamp(seconds, "timestamp")
     total_millis = int(round(seconds * 1000))
     whole, millis = divmod(total_millis, 1000)
     minutes, sec = divmod(whole, 60)
     hours, minutes = divmod(minutes, 60)
     return hours, minutes, sec, millis
+
+
+def _validate_segment_timestamps(segment: TranscriptSegment) -> None:
+    _validate_timestamp(segment.start, "segment start")
+    _validate_timestamp(segment.end, "segment end")
+    if segment.end < segment.start:
+        raise ValueError("Segment end time must be greater than or equal to start time.")
+
+
+def _validate_timestamp(value: float, label: str) -> None:
+    if not isinstance(value, Real) or isinstance(value, bool) or not math.isfinite(value):
+        raise ValueError(f"{label.capitalize()} must be a finite number.")
+    if value < 0:
+        raise ValueError(f"{label.capitalize()} must be zero or greater.")
