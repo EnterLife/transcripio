@@ -41,6 +41,7 @@ tests/test_media.py
 tests/test_model_backed_integration.py
 tests/test_model_catalog.py
 tests/test_pipeline.py
+tests/test_project_metadata.py
 tests/test_setup_scripts.py
 tests/test_storage.py
 tests/test_transcriber.py

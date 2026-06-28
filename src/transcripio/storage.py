@@ -88,4 +88,14 @@ def load_result(path: Path) -> TranscriptionResult:
 def list_history(history_dir: Path) -> list[Path]:
     if not history_dir.exists():
         return []
-    return sorted(history_dir.glob("*.json"), key=lambda path: path.stat().st_mtime, reverse=True)
+
+    history_files: list[tuple[float, Path]] = []
+    for path in history_dir.glob("*.json"):
+        try:
+            modified_at = path.stat().st_mtime
+        except OSError:
+            continue
+        history_files.append((modified_at, path))
+
+    history_files.sort(key=lambda item: item[0], reverse=True)
+    return [path for _modified_at, path in history_files]
