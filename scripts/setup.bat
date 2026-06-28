@@ -8,7 +8,9 @@ if not exist ".venv\Scripts\python.exe" (
 
 ".venv\Scripts\python.exe" -m pip install -U pip || goto fail
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt || goto fail
+".venv\Scripts\python.exe" scripts\install_ffmpeg.py || goto fail
 ".venv\Scripts\python.exe" -m pip install -e . --no-deps || goto fail
+".venv\Scripts\python.exe" scripts\install_cuda_runtime_if_needed.py || goto fail
 
 echo.
 echo Done. To launch:

@@ -67,6 +67,18 @@ def install_cuda_runtime_packages() -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, capture_output=True, text=True, check=False)
 
 
+def has_cuda_capable_gpu(output_dir: Path = Path("data/output")) -> bool:
+    try:
+        from transcripio.hardware import detect_hardware_profile
+    except ImportError:
+        return False
+
+    try:
+        return detect_hardware_profile(output_dir).has_cuda_gpu
+    except OSError:
+        return False
+
+
 def _can_find_dll(dll_name: str) -> bool:
     search_dirs = [Path.cwd(), *discover_nvidia_dll_dirs()]
     search_dirs.extend(Path(part) for part in os.environ.get("PATH", "").split(os.pathsep) if part)

@@ -44,6 +44,7 @@ def test_model_options_do_not_duplicate_configured_cached_repos(tmp_path: Path) 
 
     options = list_whisper_model_options(
         ("Systran/faster-whisper-small",),
+        models_dir=tmp_path / "empty-models",
         hf_cache_dir=tmp_path,
     )
 

@@ -38,6 +38,8 @@ transcripio/
   scripts/setup.bat              Windows setup script for .venv
   scripts/run.bat                Windows app launcher
   scripts/install_gpu_runtime.bat optional NVIDIA CUDA runtime installer
+  scripts/install_ffmpeg.py       installs ffmpeg into .venv
+  scripts/install_cuda_runtime_if_needed.py conditional CUDA runtime installer
   scripts/prepare_pyannote.py    helper for downloading a local pyannote pipeline
   src/transcripio/
     config.py                    app configuration
@@ -58,7 +60,7 @@ transcripio/
 
 - Windows Command Prompt or PowerShell.
 - Python 3.10 or newer.
-- `ffmpeg` available from the command line.
+- `ffmpeg` is installed into `.venv` by `scripts\setup.bat`.
 - Enough disk space for ML dependencies and local models.
 - Optional: NVIDIA GPU with a compatible PyTorch setup if you want CUDA.
 
@@ -71,16 +73,18 @@ The default setup uses CPU-friendly settings:
 
 ## Install ffmpeg
 
-Check whether `ffmpeg` is already available:
+`scripts\setup.bat` installs a local `ffmpeg.exe` into `.venv\Scripts` using the
+`imageio-ffmpeg` package. `scripts\run.bat` prepends `.venv\Scripts` to `PATH`, so the
+app uses that local binary without requiring a system-wide install.
+
+To check the bundled binary after setup:
 
 ```powershell
-ffmpeg -version
+.\.venv\Scripts\ffmpeg.exe -version
 ```
 
-If the command is not found, install ffmpeg and add it to `PATH`. On Windows, one common
-option is a full build from Gyan.dev or installation through a package manager such as
-Chocolatey, Scoop, or winget. After installation, open a new PowerShell window and run
-the check again.
+You can still use a system `ffmpeg` by changing `transcription.ffmpeg_path` in
+`settings.json`.
 
 ## Quick Start
 
@@ -95,7 +99,10 @@ The script does all of this:
 1. Creates `.venv` if it does not exist.
 2. Updates `pip` inside `.venv`.
 3. Installs every dependency from `requirements.txt`.
-4. Installs this project in editable mode with `pip install -e . --no-deps`.
+4. Installs `ffmpeg.exe` into `.venv\Scripts`.
+5. Installs this project in editable mode with `pip install -e . --no-deps`.
+6. Installs NVIDIA CUDA runtime packages only when a CUDA-capable NVIDIA GPU is detected
+   and the required CUDA DLLs are missing.
 
 Then launch the app:
 
@@ -118,7 +125,9 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -U pip
 python -m pip install -r requirements.txt
+python scripts\install_ffmpeg.py
 python -m pip install -e . --no-deps
+python scripts\install_cuda_runtime_if_needed.py
 ```
 
 Run the app:
@@ -409,7 +418,7 @@ Then choose the provider in the sidebar and generate notes from a completed tran
 For fully offline transcription:
 
 1. Install dependencies while online with `.\scripts\setup.bat`.
-2. Install `ffmpeg`.
+2. Run `.\scripts\setup.bat` while online so the local `.venv` and `ffmpeg` binary are ready.
 3. Download or prepare a local CTranslate2 Whisper model.
 4. Optional: download a local pyannote diarization pipeline.
 5. Optional: run LM Studio locally if you want offline LLM notes.
@@ -477,15 +486,16 @@ Check imports:
 .\.venv\Scripts\python.exe -c "import streamlit, faster_whisper, torchaudio; import transcripio; print('ok')"
 ```
 
-Check ffmpeg:
+Check the local ffmpeg binary:
 
 ```powershell
-ffmpeg -version
+.\.venv\Scripts\ffmpeg.exe -version
 ```
 
 ## Troubleshooting
 
-If `ffmpeg` is not found, install it and open a new PowerShell window so `PATH` is refreshed.
+If `ffmpeg` is not found when launching through another shell, use `scripts\run.bat` or
+activate `.venv` so `.venv\Scripts` is on `PATH`.
 
 If CUDA fails, switch the app sidebar back to:
 
@@ -498,13 +508,15 @@ If you see `Library cublas64_12.dll is not found or cannot be loaded`, CUDA runt
 DLLs are missing. Transcripio falls back to CPU when it can, but CPU/int8 is the
 recommended first transcription setting.
 
-To use GPU mode, open the CUDA install panel in the sidebar or run:
+To use GPU mode on a computer with an NVIDIA GPU, open the CUDA install panel in the
+sidebar or run:
 
 ```powershell
 .\scripts\install_gpu_runtime.bat
 ```
 
-This installs official NVIDIA Python packages into `.venv`:
+This checks for a CUDA-capable NVIDIA GPU and then installs official NVIDIA Python
+runtime packages into `.venv` only when the required DLLs are missing:
 
 ```text
 nvidia-cublas-cu12
@@ -512,8 +524,10 @@ nvidia-cudnn-cu12==9.*
 ```
 
 Transcripio automatically adds their DLL directories before loading the Whisper model.
-If **Auto-install missing GPU runtime before transcription** is enabled, this install
-happens automatically the first time a CUDA transcription needs those DLLs.
+If no CUDA-capable NVIDIA GPU is detected, setup and transcription skip this download and
+use CPU-friendly defaults. If **Auto-install missing GPU runtime before transcription**
+is enabled, the install happens automatically only when CUDA is selected, a compatible
+GPU is detected, and those DLLs are missing.
 
 If you see a Hugging Face unauthenticated request warning, either use a model marked
 `downloaded`, enable **Use downloaded/local files only**, or set `HF_TOKEN` before launch.

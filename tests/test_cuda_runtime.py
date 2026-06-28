@@ -29,3 +29,15 @@ def test_configure_cuda_dll_paths_reports_missing_dlls(tmp_path: Path, monkeypat
     assert status.is_ready is False
     assert status.missing_dlls == ("cudnn64_9.dll",)
     assert status.dll_dirs == (bin_dir,)
+
+
+def test_has_cuda_capable_gpu_reports_false_when_detection_fails(monkeypatch) -> None:
+    def fake_detect_hardware_profile(_output_dir):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(
+        "transcripio.hardware.detect_hardware_profile",
+        fake_detect_hardware_profile,
+    )
+
+    assert cuda_runtime.has_cuda_capable_gpu() is False

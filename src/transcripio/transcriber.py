@@ -5,7 +5,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 from transcripio.config import AppConfig
-from transcripio.cuda_runtime import configure_cuda_dll_paths, install_cuda_runtime_packages
+from transcripio.cuda_runtime import (
+    configure_cuda_dll_paths,
+    has_cuda_capable_gpu,
+    install_cuda_runtime_packages,
+)
 from transcripio.models import TranscriptSegment, TranscriptWord
 
 SegmentProgressCallback = Callable[[TranscriptSegment, float | None], None]
@@ -39,7 +43,7 @@ class WhisperTranscriber:
             if not self._should_fallback_to_cpu(exc):
                 raise
             self.runtime_notice = (
-                "CUDA libraries are not available, so transcription is running on CPU with int8."
+                "CUDA is not available, so transcription is running on CPU with int8."
             )
             model = self._create_model(WhisperModel, device="cpu", compute_type="int8")
             self._model = self._wrap_model(model, BatchedInferencePipeline)
@@ -49,6 +53,11 @@ class WhisperTranscriber:
         if device == "cuda":
             cuda_status = configure_cuda_dll_paths()
             if not cuda_status.is_ready and self._config.auto_install_cuda_runtime:
+                if not has_cuda_capable_gpu(self._config.output_dir):
+                    raise RuntimeError(
+                        "CUDA was selected, but no CUDA-capable NVIDIA GPU was detected. "
+                        "Use cpu/int8 on this computer."
+                    )
                 completed = install_cuda_runtime_packages()
                 if completed.returncode != 0:
                     details = completed.stderr.strip() or completed.stdout.strip()

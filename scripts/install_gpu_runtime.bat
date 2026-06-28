@@ -7,7 +7,7 @@ if not exist ".venv\Scripts\python.exe" (
     goto fail
 )
 
-".venv\Scripts\python.exe" -m pip install nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*" || goto fail
+".venv\Scripts\python.exe" scripts\install_cuda_runtime_if_needed.py || goto fail
 
 set "EXIT_CODE=0"
 goto finish

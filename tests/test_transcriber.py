@@ -68,11 +68,48 @@ def test_cuda_model_auto_installs_missing_runtime(monkeypatch) -> None:
         "transcripio.transcriber.install_cuda_runtime_packages",
         fake_install_cuda_runtime_packages,
     )
+    monkeypatch.setattr("transcripio.transcriber.has_cuda_capable_gpu", lambda _output_dir: True)
 
     transcriber._create_model(FakeModel, device="cuda", compute_type="float16")
 
     assert configure_calls == 2
     assert install_calls == 1
+
+
+def test_cuda_model_does_not_auto_install_runtime_without_gpu(monkeypatch) -> None:
+    transcriber = WhisperTranscriber(AppConfig(device="cuda", auto_install_cuda_runtime=True))
+    install_calls = 0
+
+    class FakeModel:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+    def fake_install_cuda_runtime_packages():
+        nonlocal install_calls
+        install_calls += 1
+
+    monkeypatch.setattr(
+        "transcripio.transcriber.configure_cuda_dll_paths",
+        lambda: CudaRuntimeStatus(
+            is_ready=False,
+            missing_dlls=("cublas64_12.dll",),
+            dll_dirs=(),
+        ),
+    )
+    monkeypatch.setattr("transcripio.transcriber.has_cuda_capable_gpu", lambda _output_dir: False)
+    monkeypatch.setattr(
+        "transcripio.transcriber.install_cuda_runtime_packages",
+        fake_install_cuda_runtime_packages,
+    )
+
+    try:
+        transcriber._create_model(FakeModel, device="cuda", compute_type="float16")
+    except RuntimeError as exc:
+        assert "no CUDA-capable NVIDIA GPU" in str(exc)
+    else:
+        raise AssertionError("Expected missing GPU to stop CUDA runtime auto-install.")
+
+    assert install_calls == 0
 
 
 def test_batched_transcribe_passes_batch_size(monkeypatch, tmp_path: Path) -> None:

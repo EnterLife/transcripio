@@ -865,32 +865,39 @@ def main() -> None:
             index=_selected_index(device_options, active_config.device),
         )
         if device == "cuda":
-            cuda_status = configure_cuda_dll_paths()
-            st.warning(
-                "CUDA needs NVIDIA CUDA/cuBLAS DLLs. If they are missing, Transcripio will fall back to CPU."
-            )
-            if cuda_status.is_ready:
-                st.caption("CUDA runtime DLLs were found.")
+            if not hardware_profile.has_cuda_gpu:
+                st.warning(
+                    "No CUDA-capable NVIDIA GPU was detected. Transcripio will fall back to CPU."
+                )
+                auto_install_cuda_runtime = False
             else:
-                st.caption(f"Missing CUDA DLLs: {', '.join(cuda_status.missing_dlls)}")
-                with st.expander("Install official CUDA runtime packages"):
-                    st.caption(
-                        "Installs via pip: " + ", ".join(CUDA_RUNTIME_PACKAGES)
-                    )
-                    if st.button("Install GPU runtime", width="stretch"):
-                        with st.spinner("Installing NVIDIA CUDA runtime packages"):
-                            completed = install_cuda_runtime_packages()
-                        if completed.returncode == 0:
-                            configure_cuda_dll_paths()
-                            st.success("GPU runtime packages installed. Try processing again.")
-                        else:
-                            details = completed.stderr.strip() or completed.stdout.strip()
-                            st.error(f"Could not install GPU runtime packages: {details}")
-            auto_install_cuda_runtime = st.checkbox(
-                "Auto-install missing GPU runtime before transcription",
-                value=active_config.auto_install_cuda_runtime,
-                help="Downloads official NVIDIA pip packages only when CUDA is selected and DLLs are missing.",
-            )
+                cuda_status = configure_cuda_dll_paths()
+                st.warning(
+                    "CUDA needs NVIDIA CUDA/cuBLAS DLLs. If they are missing, Transcripio will fall back to CPU."
+                )
+                if cuda_status.is_ready:
+                    st.caption("CUDA runtime DLLs were found.")
+                else:
+                    st.caption(f"Missing CUDA DLLs: {', '.join(cuda_status.missing_dlls)}")
+                    with st.expander("Install official CUDA runtime packages"):
+                        st.caption("Installs via pip: " + ", ".join(CUDA_RUNTIME_PACKAGES))
+                        if st.button("Install GPU runtime", width="stretch"):
+                            with st.spinner("Installing NVIDIA CUDA runtime packages"):
+                                completed = install_cuda_runtime_packages()
+                            if completed.returncode == 0:
+                                configure_cuda_dll_paths()
+                                st.success("GPU runtime packages installed. Try processing again.")
+                            else:
+                                details = completed.stderr.strip() or completed.stdout.strip()
+                                st.error(f"Could not install GPU runtime packages: {details}")
+                auto_install_cuda_runtime = st.checkbox(
+                    "Auto-install missing GPU runtime before transcription",
+                    value=active_config.auto_install_cuda_runtime,
+                    help=(
+                        "Downloads official NVIDIA pip packages only when CUDA is selected, "
+                        "a CUDA-capable GPU is detected, and DLLs are missing."
+                    ),
+                )
         else:
             auto_install_cuda_runtime = False
         compute_type_options = ["int8", "float16", "float32"]
