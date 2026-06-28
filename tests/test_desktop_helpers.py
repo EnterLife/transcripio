@@ -5,12 +5,15 @@ from pathlib import Path
 import pytest
 
 from transcripio.config import AppConfig
+from transcripio.health import HealthCheck
 from transcripio.models import TranscriptSegment, TranscriptionResult
 from transcripio_desktop.helpers import (
+    blocking_health_message,
     build_desktop_config,
     export_result,
     format_duration,
     format_file_size,
+    health_log_lines,
     result_metrics,
     result_title,
     safe_file_stem,
@@ -72,6 +75,30 @@ def test_desktop_format_helpers_are_readable() -> None:
     assert format_file_size(500) == "500 B"
     assert format_file_size(2048) == "2.0 KB"
     assert safe_file_stem('bad:name?.mp3') == "bad_name_.mp3"
+
+
+def test_blocking_health_message_reports_errors_only() -> None:
+    checks = [
+        HealthCheck("ffmpeg", "ok", "ffmpeg is available."),
+        HealthCheck("Whisper model", "warning", "May download on first use."),
+        HealthCheck("Network proxy", "error", "Unsupported proxy scheme."),
+    ]
+
+    assert blocking_health_message(checks) == (
+        "Fix these issues before processing:\n"
+        "- Network proxy: Unsupported proxy scheme."
+    )
+    assert health_log_lines(checks) == [
+        "  ffmpeg: ok - ffmpeg is available.",
+        "  Whisper model: warning - May download on first use.",
+        "  Network proxy: error - Unsupported proxy scheme.",
+    ]
+
+
+def test_blocking_health_message_allows_warnings() -> None:
+    checks = [HealthCheck("Whisper model", "warning", "May download on first use.")]
+
+    assert blocking_health_message(checks) is None
 
 
 def test_result_metrics_count_distinct_speakers(tmp_path: Path) -> None:

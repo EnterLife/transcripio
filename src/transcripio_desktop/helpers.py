@@ -6,6 +6,7 @@ import re
 
 from transcripio.config import AppConfig
 from transcripio.formatters import to_docx, to_json, to_srt, to_txt, to_vtt, to_words_csv
+from transcripio.health import HealthCheck
 from transcripio.models import TranscriptionResult
 
 
@@ -17,6 +18,20 @@ class ExportArtifact:
 
 
 EXPORT_FORMATS = ("TXT", "SRT", "VTT", "DOCX", "JSON", "Words CSV")
+
+
+def blocking_health_message(checks: list[HealthCheck]) -> str | None:
+    errors = [check for check in checks if check.status == "error"]
+    if not errors:
+        return None
+
+    lines = ["Fix these issues before processing:"]
+    lines.extend(f"- {check.name}: {check.message}" for check in errors)
+    return "\n".join(lines)
+
+
+def health_log_lines(checks: list[HealthCheck]) -> list[str]:
+    return [f"  {check.name}: {check.status} - {check.message}" for check in checks]
 
 
 def build_desktop_config(

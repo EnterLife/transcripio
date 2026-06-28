@@ -43,9 +43,11 @@ from transcripio.pipeline import TranscriptionPipeline
 from transcripio.storage import StorageError, list_history, load_result, save_result
 from transcripio_desktop.helpers import (
     EXPORT_FORMATS,
+    blocking_health_message,
     build_desktop_config,
     export_result,
     format_file_size,
+    health_log_lines,
     result_metrics,
     result_title,
 )
@@ -495,6 +497,17 @@ class DesktopWindow(QMainWindow):
             return
 
         config = self._current_config()
+        checks = run_environment_checks(config)
+        self._log("Preflight checks:")
+        for line in health_log_lines(checks):
+            self._log(line)
+        blocking_message = blocking_health_message(checks)
+        if blocking_message is not None:
+            QMessageBox.warning(self, "Preflight failed", blocking_message)
+            self.status_label.setText("Preflight failed")
+            self._log("Queue was not started because preflight checks failed.")
+            return
+
         self.active_run_config = config
         self.worker = TranscriptionWorker(list(self.queue_files), config)
         self.worker.file_started.connect(self._on_file_started)
@@ -677,8 +690,8 @@ class DesktopWindow(QMainWindow):
     def _run_environment_checks(self) -> None:
         checks = run_environment_checks(self._current_config())
         self._log("Environment checks:")
-        for check in checks:
-            self._log(f"  {check.name}: {check.status} - {check.message}")
+        for line in health_log_lines(checks):
+            self._log(line)
 
     def _browse_diarization_path(self) -> None:
         path, _filter = QFileDialog.getOpenFileName(
