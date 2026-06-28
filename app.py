@@ -230,7 +230,7 @@ def _show_result_editor(
     edited_rows = st.data_editor(
         rows,
         key=f"{editor_key_prefix}-segments-{result.job_id}",
-        width="stretch",
+        use_container_width=True,
         hide_index=True,
         num_rows="fixed",
         column_config={
@@ -374,7 +374,7 @@ def _show_editor_tools(
             if st.button(
                 "Replace all",
                 key=f"{editor_key_prefix}-replace-all-{result.job_id}",
-                width="stretch",
+                use_container_width=True,
             ):
                 result.segments, count = replace_in_segments(
                     result.segments,
@@ -403,7 +403,7 @@ def _show_editor_tools(
             if st.button(
                 "Rename speaker",
                 key=f"{editor_key_prefix}-bulk-speaker-apply-{result.job_id}",
-                width="stretch",
+                use_container_width=True,
             ):
                 result.segments, count = rename_speaker(result.segments, old_speaker, new_speaker)
                 save_result(result, history_dir)
@@ -435,7 +435,7 @@ def _show_editor_tools(
                 if st.button(
                     "Split segment",
                     key=f"{editor_key_prefix}-split-apply-{result.job_id}",
-                    width="stretch",
+                    use_container_width=True,
                 ):
                     try:
                         result.segments = split_segment_at(
@@ -461,7 +461,7 @@ def _show_editor_tools(
                     if st.button(
                         "Merge segment",
                         key=f"{editor_key_prefix}-merge-apply-{result.job_id}",
-                        width="stretch",
+                        use_container_width=True,
                     ):
                         try:
                             result.segments = merge_segments(result.segments, merge_index)
@@ -548,7 +548,7 @@ def _show_llm_actions(
         if st.button(
             "Generate",
             key=f"{editor_key_prefix}-llm-generate-{result.job_id}",
-            width="stretch",
+            use_container_width=True,
         ):
             api_key = os.getenv(provider_config.api_key_env or "")
             try:
@@ -753,7 +753,7 @@ def _show_hf_token_controls() -> str | None:
             help="Saved to local .env, which is ignored by git.",
         )
         col1, col2 = st.columns(2)
-        if col1.button("Save token", width="stretch"):
+        if col1.button("Save token", use_container_width=True):
             try:
                 save_hf_token(token_input)
             except ValueError as exc:
@@ -761,7 +761,7 @@ def _show_hf_token_controls() -> str | None:
             else:
                 saved_or_env_token = resolve_hf_token()
                 st.success("HF_TOKEN saved to .env")
-        if col2.button("Clear token", width="stretch"):
+        if col2.button("Clear token", use_container_width=True):
             clear_saved_hf_token()
             saved_or_env_token = None
             st.success("HF_TOKEN removed from .env")
@@ -772,7 +772,7 @@ def _show_hf_token_controls() -> str | None:
 def _show_environment_checks(config: AppConfig) -> None:
     with st.expander("Environment check"):
         st.caption("Checks the current sidebar settings before running transcription.")
-        if st.button("Run checks", width="stretch"):
+        if st.button("Run checks", use_container_width=True):
             for check in run_environment_checks(config):
                 message = f"{check.name}: {check.message}"
                 if check.status == "ok":
@@ -809,7 +809,7 @@ def _show_benchmark_controls(
             default=[config.whisper_model] if config.whisper_model in available_models else [],
             help="Select downloaded/local models to compare. Leave empty to benchmark current settings.",
         )
-        if st.button("Run benchmark", width="stretch"):
+        if st.button("Run benchmark", use_container_width=True):
             try:
                 with tempfile.TemporaryDirectory(prefix="transcripio-benchmark-") as tmp_dir:
                     with st.spinner("Benchmarking local transcription"):
@@ -1017,7 +1017,7 @@ def main() -> None:
                 value=str(default_whisper_output_dir(whisper_download_repo)),
                 help="Use the downloaded local path as the Whisper model.",
             )
-            if st.button("Download Whisper model", width="stretch"):
+            if st.button("Download Whisper model", use_container_width=True):
                 try:
                     with st.spinner("Downloading local Whisper model"):
                         download_result = download_whisper_model(
@@ -1064,7 +1064,7 @@ def main() -> None:
                     st.caption(f"Missing CUDA DLLs: {', '.join(cuda_status.missing_dlls)}")
                     with st.expander("Install official CUDA runtime packages"):
                         st.caption("Installs via pip: " + ", ".join(CUDA_RUNTIME_PACKAGES))
-                        if st.button("Install GPU runtime", width="stretch"):
+                        if st.button("Install GPU runtime", use_container_width=True):
                             with st.spinner("Installing NVIDIA CUDA runtime packages"):
                                 completed = install_cuda_runtime_packages()
                             if completed.returncode == 0:
@@ -1251,7 +1251,7 @@ def main() -> None:
                     st.caption("Using HF_TOKEN from the Hugging Face section.")
                 else:
                     st.caption("Add HF_TOKEN in the Hugging Face section before checking or downloading.")
-                if st.button("Check HF access", width="stretch"):
+                if st.button("Check HF access", use_container_width=True):
                     try:
                         with st.spinner("Checking Hugging Face access"):
                             access_check = check_huggingface_diarization_access(
@@ -1268,7 +1268,7 @@ def main() -> None:
                                 st.success(f"{repo_access.repo_id}: access granted")
                             else:
                                 st.error(f"{repo_access.repo_id}: {repo_access.message}")
-                if st.button("Download speaker model", width="stretch"):
+                if st.button("Download speaker model", use_container_width=True):
                     try:
                         with st.spinner("Downloading local diarization pipeline"):
                             download_result = download_diarization_pipeline(
@@ -1346,7 +1346,7 @@ def main() -> None:
         _show_environment_checks(selected_config)
         _show_benchmark_controls(selected_config, model_options)
 
-    upload_col, summary_col = st.columns([2, 1], vertical_alignment="top")
+    upload_col, summary_col = st.columns([2, 1])
     with upload_col:
         st.subheader("New transcription")
         uploaded_files = st.file_uploader(
@@ -1364,7 +1364,7 @@ def main() -> None:
             st.subheader("Queued files")
             st.dataframe(
                 _uploaded_file_rows(uploaded_files),
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
             )
         else:
@@ -1374,7 +1374,7 @@ def main() -> None:
             "Process queue",
             type="primary",
             disabled=not uploaded_files,
-            width="stretch",
+            use_container_width=True,
         )
 
         if run and uploaded_files:
