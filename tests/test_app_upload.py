@@ -10,10 +10,12 @@ from app import (
     _format_duration_label,
     _format_file_size,
     _save_uploaded_media,
+    _save_result_to_history,
     _speaker_count_label,
     _uploaded_file_rows,
 )
 from transcripio.models import TranscriptSegment, TranscriptionResult
+from transcripio.storage import StorageError
 
 
 class StreamOnlyUpload(BytesIO):
@@ -111,3 +113,30 @@ def test_uploaded_file_rows_format_sizes() -> None:
         size = 2048
 
     assert _uploaded_file_rows([UploadedFile()]) == [{"File": "meeting.wav", "Size": "2.0 KB"}]
+
+
+def test_save_result_to_history_warns_without_losing_session_result(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    warnings: list[str] = []
+    result = TranscriptionResult(
+        job_id="job-1",
+        source_name="meeting.mp3",
+        source_path=tmp_path / "meeting.mp3",
+        audio_path=tmp_path / "meeting.prepared.wav",
+        language="en",
+        duration=1.0,
+        created_at="2026-06-23T12:00:00",
+    )
+
+    def fail_save_result(_result, _history_dir):
+        raise StorageError("disk is read-only")
+
+    monkeypatch.setattr("app.save_result", fail_save_result)
+    monkeypatch.setattr("app.st.warning", warnings.append)
+
+    assert _save_result_to_history(result, tmp_path) is False
+    assert warnings == [
+        "Transcript is available in this session, but history was not saved: disk is read-only"
+    ]

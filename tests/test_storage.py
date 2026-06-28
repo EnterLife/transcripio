@@ -53,6 +53,23 @@ def test_load_result_reports_unsupported_payload(tmp_path: Path) -> None:
         load_result(path)
 
 
+def test_save_result_reports_history_directory_errors(tmp_path: Path) -> None:
+    history_dir = tmp_path / "history.json"
+    history_dir.write_text("not a directory", encoding="utf-8")
+    result = TranscriptionResult(
+        job_id="abc123",
+        source_name="call.mp4",
+        source_path=Path("call.mp4"),
+        audio_path=Path("call.prepared.wav"),
+        language="en",
+        duration=2.0,
+        created_at="2026-05-31T00:00:00+00:00",
+    )
+
+    with pytest.raises(StorageError, match="history directory"):
+        save_result(result, history_dir)
+
+
 def test_list_history_skips_files_that_disappear_during_listing(
     tmp_path: Path,
     monkeypatch,

@@ -57,7 +57,11 @@ def result_from_dict(payload: dict) -> TranscriptionResult:
 
 
 def save_result(result: TranscriptionResult, history_dir: Path) -> Path:
-    history_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        history_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise StorageError(f"Could not create transcript history directory: {history_dir}") from exc
+
     path = history_dir / f"{result.created_at[:10]}-{result.job_id}.json"
     tmp_path = history_dir / f".{path.name}.{uuid4().hex}.tmp"
     try:
@@ -66,6 +70,8 @@ def save_result(result: TranscriptionResult, history_dir: Path) -> Path:
             encoding="utf-8",
         )
         tmp_path.replace(path)
+    except OSError as exc:
+        raise StorageError(f"Could not save transcript history file: {path.name}") from exc
     finally:
         if tmp_path.exists():
             tmp_path.unlink()

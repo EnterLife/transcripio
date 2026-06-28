@@ -311,7 +311,7 @@ def _show_result_editor(
             )
         )
     result.segments = updated_segments
-    save_result(result, history_dir)
+    _save_result_to_history(result, history_dir)
 
     preview = to_txt(result.segments)
     st.text_area(
@@ -434,7 +434,7 @@ def _show_editor_tools(
                     replacement,
                     case_sensitive=case_sensitive,
                 )
-                save_result(result, history_dir)
+                _save_result_to_history(result, history_dir)
                 st.success(f"Replaced {count} occurrence(s).")
                 st.rerun()
 
@@ -458,7 +458,7 @@ def _show_editor_tools(
                 use_container_width=True,
             ):
                 result.segments, count = rename_speaker(result.segments, old_speaker, new_speaker)
-                save_result(result, history_dir)
+                _save_result_to_history(result, history_dir)
                 st.success(f"Renamed {count} segment(s).")
                 st.rerun()
 
@@ -498,7 +498,7 @@ def _show_editor_tools(
                     except ValueError as exc:
                         st.error(str(exc))
                     else:
-                        save_result(result, history_dir)
+                        _save_result_to_history(result, history_dir)
                         st.success("Segment split.")
                         st.rerun()
             with merge_col:
@@ -520,7 +520,7 @@ def _show_editor_tools(
                         except ValueError as exc:
                             st.error(str(exc))
                         else:
-                            save_result(result, history_dir)
+                            _save_result_to_history(result, history_dir)
                             st.success("Segments merged.")
                             st.rerun()
 
@@ -690,6 +690,15 @@ def _save_uploaded_media(uploaded_file, destination: Path) -> None:
     with destination.open("wb") as output_file:
         copyfileobj(uploaded_file, output_file, UPLOAD_COPY_CHUNK_SIZE)
     uploaded_file.seek(0)
+
+
+def _save_result_to_history(result: TranscriptionResult, history_dir: Path) -> bool:
+    try:
+        save_result(result, history_dir)
+    except StorageError as exc:
+        st.warning(f"Transcript is available in this session, but history was not saved: {exc}")
+        return False
+    return True
 
 
 def _format_file_size(size_bytes: int) -> str:
@@ -1454,8 +1463,8 @@ def main() -> None:
                         st.error(f"{uploaded_file.name}: {exc}")
                         continue
 
-                save_result(result, config.history_dir)
                 st.session_state.results[result.job_id] = result
+                _save_result_to_history(result, config.history_dir)
                 st.success(f"Finished `{uploaded_file.name}`")
 
         if st.session_state.results:
