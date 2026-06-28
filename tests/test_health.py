@@ -7,6 +7,7 @@ from transcripio.config import AppConfig
 from transcripio.health import (
     HealthCheck,
     check_ffmpeg,
+    check_network_proxy,
     check_whisper_model,
     run_environment_checks,
 )
@@ -50,10 +51,36 @@ def test_check_whisper_model_treats_huggingface_repo_as_model_name() -> None:
     assert check.status == "ok"
 
 
+def test_check_network_proxy_reports_unsupported_proxy_scheme(monkeypatch) -> None:
+    _clear_proxy_env(monkeypatch)
+    monkeypatch.setenv("ALL_PROXY", "socks4://127.0.0.1:10808")
+
+    check = check_network_proxy("small", local_files_only=False)
+
+    assert check == HealthCheck(
+        name="Network proxy",
+        status="error",
+        message=(
+            "ALL_PROXY uses unsupported proxy scheme 'socks4'. "
+            "Use an http:// or https:// proxy, unset the proxy variable, "
+            "or select a downloaded/local Whisper model with offline-only mode."
+        ),
+    )
+
+
+def test_check_network_proxy_skips_local_or_offline_models(monkeypatch, tmp_path: Path) -> None:
+    _clear_proxy_env(monkeypatch)
+    monkeypatch.setenv("ALL_PROXY", "socks4://127.0.0.1:10808")
+
+    assert check_network_proxy("small", local_files_only=True) is None
+    assert check_network_proxy(str(tmp_path / "model"), local_files_only=False) is None
+
+
 def test_run_environment_checks_includes_writable_dirs(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
+    _clear_proxy_env(monkeypatch)
     monkeypatch.setattr(
         "transcripio.health.check_ffmpeg",
         lambda _path: HealthCheck("ffmpeg", "ok", "ok"),
@@ -72,3 +99,39 @@ def test_run_environment_checks_includes_writable_dirs(
     assert checks_by_name["History directory"].status == "ok"
     assert (tmp_path / "output").exists()
     assert (tmp_path / "history").exists()
+
+
+def test_run_environment_checks_includes_proxy_errors(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _clear_proxy_env(monkeypatch)
+    monkeypatch.setenv("ALL_PROXY", "socks4://127.0.0.1:10808")
+    monkeypatch.setattr(
+        "transcripio.health.check_ffmpeg",
+        lambda _path: HealthCheck("ffmpeg", "ok", "ok"),
+    )
+
+    checks = run_environment_checks(
+        AppConfig(
+            whisper_model="small",
+            output_dir=tmp_path / "output",
+            history_dir=tmp_path / "history",
+        )
+    )
+
+    checks_by_name = {check.name: check for check in checks}
+    assert checks_by_name["Network proxy"].status == "error"
+
+
+def _clear_proxy_env(monkeypatch) -> None:
+    proxy_names = (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    )
+    for name in proxy_names:
+        monkeypatch.delenv(name, raising=False)

@@ -31,6 +31,30 @@ def test_cuda_cublas_error_falls_back_to_cpu(monkeypatch) -> None:
     assert transcriber.runtime_notice is not None
 
 
+def test_model_load_reports_unsupported_proxy_cleanly(monkeypatch) -> None:
+    monkeypatch.setitem(
+        sys.modules,
+        "faster_whisper",
+        types.SimpleNamespace(BatchedInferencePipeline=object, WhisperModel=object),
+    )
+    transcriber = WhisperTranscriber(AppConfig())
+
+    def fake_create_model(_model_class, device: str, compute_type: str):
+        raise RuntimeError("Unknown scheme for proxy URL URL('socks4://127.0.0.1:10808')")
+
+    monkeypatch.setattr(transcriber, "_create_model", fake_create_model)
+
+    try:
+        transcriber._load_model()
+    except RuntimeError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Expected proxy model load failure.")
+
+    assert "configured network proxy is unsupported" in message
+    assert "socks4://127.0.0.1:10808" not in message
+
+
 def test_cuda_model_auto_installs_missing_runtime(monkeypatch) -> None:
     transcriber = WhisperTranscriber(AppConfig(device="cuda", auto_install_cuda_runtime=True))
     configure_calls = 0

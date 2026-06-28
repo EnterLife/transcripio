@@ -41,11 +41,14 @@ class WhisperTranscriber:
             self._model = self._wrap_model(model, BatchedInferencePipeline)
         except Exception as exc:
             if not self._should_fallback_to_cpu(exc):
-                raise
+                raise RuntimeError(_clean_model_load_error(exc)) from exc
             self.runtime_notice = (
                 "CUDA is not available, so transcription is running on CPU with int8."
             )
-            model = self._create_model(WhisperModel, device="cpu", compute_type="int8")
+            try:
+                model = self._create_model(WhisperModel, device="cpu", compute_type="int8")
+            except Exception as fallback_exc:
+                raise RuntimeError(_clean_model_load_error(fallback_exc)) from fallback_exc
             self._model = self._wrap_model(model, BatchedInferencePipeline)
         return self._model
 
@@ -143,3 +146,15 @@ class WhisperTranscriber:
 
         language = getattr(info, "language", self._config.language)
         return segments, language, duration
+
+
+def _clean_model_load_error(exc: Exception) -> str:
+    message = str(exc).strip()
+    lowered = message.lower()
+    if "unknown scheme for proxy url" in lowered or "unsupported proxy" in lowered:
+        return (
+            "Whisper model download failed because the configured network proxy is unsupported. "
+            "Use an http:// or https:// proxy, unset HTTP_PROXY/HTTPS_PROXY/ALL_PROXY, "
+            "or select a downloaded/local Whisper model with offline-only mode."
+        )
+    return message
