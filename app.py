@@ -82,6 +82,101 @@ def _inject_status_spinner_css() -> None:
     st.markdown(
         """
         <style>
+        :root {
+            --transcripio-surface: #f7f8fb;
+            --transcripio-border: #d9dee8;
+            --transcripio-muted: #596579;
+            --transcripio-text: #172033;
+            --transcripio-accent: #247a73;
+            --transcripio-focus: #315fbd;
+        }
+
+        .stApp {
+            background: var(--transcripio-surface);
+            color: var(--transcripio-text);
+        }
+
+        [data-testid="stSidebar"] {
+            background: #ffffff;
+            border-right: 1px solid var(--transcripio-border);
+        }
+
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {
+            letter-spacing: 0;
+        }
+
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 3rem;
+            max-width: 1180px;
+        }
+
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            border-color: var(--transcripio-border);
+            box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04);
+        }
+
+        div[data-testid="stMetric"] {
+            background: #ffffff;
+            border: 1px solid var(--transcripio-border);
+            border-radius: 8px;
+            padding: 0.75rem 0.85rem;
+        }
+
+        div[data-testid="stMetricLabel"] p {
+            color: var(--transcripio-muted);
+            font-size: 0.78rem;
+        }
+
+        div[data-testid="stMetricValue"] {
+            color: var(--transcripio-text);
+            font-size: 1.1rem;
+        }
+
+        .stButton > button[kind="primary"],
+        .stDownloadButton > button {
+            border-radius: 7px;
+        }
+
+        .stButton > button[kind="primary"] {
+            background: var(--transcripio-accent);
+            border-color: var(--transcripio-accent);
+        }
+
+        .stButton > button[kind="primary"]:hover {
+            background: #1e6761;
+            border-color: #1e6761;
+        }
+
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 0.35rem;
+            border-bottom: 1px solid var(--transcripio-border);
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            border-radius: 7px 7px 0 0;
+            padding-top: 0.55rem;
+            padding-bottom: 0.55rem;
+        }
+
+        .stTabs [aria-selected="true"] {
+            background: #ffffff;
+            color: var(--transcripio-focus);
+        }
+
+        div[data-testid="stFileUploader"] section {
+            background: #ffffff;
+            border-color: var(--transcripio-border);
+            border-radius: 8px;
+        }
+
+        div[data-testid="stDataFrame"],
+        div[data-testid="stDataEditor"] {
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
         div[data-testid="stStatusWidgetRunningIcon"] svg {
             display: none;
         }
@@ -115,10 +210,7 @@ def _show_result_editor(
     llm_provider_config: LlmProviderConfig | None = None,
 ) -> None:
     st.subheader(result.source_name)
-    if result.duration is not None:
-        st.caption(f"Language: {result.language or 'unknown'} | Duration: {result.duration:.1f}s")
-    else:
-        st.caption(f"Language: {result.language or 'unknown'}")
+    _show_result_summary(result)
 
     speaker_names = _speaker_name_overrides(result, editor_key_prefix)
     _show_editor_tools(result, history_dir, editor_key_prefix)
@@ -548,6 +640,92 @@ def _save_uploaded_media(uploaded_file, destination: Path) -> None:
     uploaded_file.seek(0)
 
 
+def _format_file_size(size_bytes: int) -> str:
+    if size_bytes < 0:
+        raise ValueError("size_bytes must be zero or greater")
+
+    units = ("B", "KB", "MB", "GB")
+    size = float(size_bytes)
+    for unit in units:
+        if size < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(size)} {unit}"
+            return f"{size:.1f} {unit}"
+        size /= 1024
+
+    return f"{size:.1f} GB"
+
+
+def _format_duration_label(duration: float | None) -> str:
+    if duration is None:
+        return "Unknown"
+    if duration < 0:
+        raise ValueError("duration must be zero or greater")
+
+    total_seconds = int(round(duration))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
+
+
+def _speaker_count_label(result: TranscriptionResult) -> str:
+    speakers = {segment.speaker for segment in result.segments if segment.speaker}
+    if not speakers:
+        return "None"
+    return str(len(speakers))
+
+
+def _created_at_label(result: TranscriptionResult) -> str:
+    return result.created_at[:19].replace("T", " ") if result.created_at else "Unknown"
+
+
+def _uploaded_file_rows(uploaded_files) -> list[dict[str, str]]:
+    return [
+        {
+            "File": uploaded_file.name,
+            "Size": _format_file_size(uploaded_file.size),
+        }
+        for uploaded_file in uploaded_files
+    ]
+
+
+def _uploaded_file_total_size(uploaded_files) -> int:
+    return sum(uploaded_file.size for uploaded_file in uploaded_files)
+
+
+def _show_run_summary(config: AppConfig, uploaded_files) -> None:
+    with st.container(border=True):
+        st.subheader("Run setup")
+        st.caption("Settings from the sidebar apply to the whole queue.")
+
+        total_size = _uploaded_file_total_size(uploaded_files or [])
+        queue_label = str(len(uploaded_files or []))
+        size_label = _format_file_size(total_size)
+        model_label = Path(config.whisper_model).name or config.whisper_model
+        speaker_label = "On" if config.diarization_model_path else "Off"
+
+        metric_cols = st.columns(2)
+        metric_cols[0].metric("Queued", queue_label)
+        metric_cols[1].metric("Total size", size_label)
+        metric_cols = st.columns(2)
+        metric_cols[0].metric("Model", model_label)
+        metric_cols[1].metric("Device", f"{config.device}/{config.compute_type}")
+        metric_cols = st.columns(2)
+        metric_cols[0].metric("Language", config.language or "Auto")
+        metric_cols[1].metric("Speakers", speaker_label)
+
+
+def _show_result_summary(result: TranscriptionResult) -> None:
+    metric_cols = st.columns(5)
+    metric_cols[0].metric("Language", result.language or "Unknown")
+    metric_cols[1].metric("Duration", _format_duration_label(result.duration))
+    metric_cols[2].metric("Segments", str(len(result.segments)))
+    metric_cols[3].metric("Speakers", _speaker_count_label(result))
+    metric_cols[4].metric("Created", _created_at_label(result))
+
+
 def _launch_with_streamlit() -> NoReturn:
     from streamlit.web import cli as streamlit_cli
 
@@ -767,8 +945,13 @@ def main() -> None:
     st.set_page_config(page_title=settings.page_title, page_icon=settings.page_icon, layout="wide")
     _inject_status_spinner_css()
 
-    st.title(settings.page_title)
-    st.caption(settings.caption)
+    title_col, status_col = st.columns([3, 1])
+    with title_col:
+        st.title(settings.page_title)
+        st.caption(settings.caption)
+    with status_col:
+        st.metric("Mode", "Local")
+        st.caption(f"Output: {default_config.output_dir}")
 
     if "results" not in st.session_state:
         st.session_state.results = {}
@@ -1163,22 +1346,26 @@ def main() -> None:
         _show_environment_checks(selected_config)
         _show_benchmark_controls(selected_config, model_options)
 
-    uploaded_files = st.file_uploader(
-        "Add audio or video files",
-        type=list(settings.upload_types),
-        accept_multiple_files=True,
-    )
+    upload_col, summary_col = st.columns([2, 1], vertical_alignment="top")
+    with upload_col:
+        st.subheader("New transcription")
+        uploaded_files = st.file_uploader(
+            "Add audio or video files",
+            type=list(settings.upload_types),
+            accept_multiple_files=True,
+        )
+    with summary_col:
+        _show_run_summary(selected_config, uploaded_files)
 
     queue_tab, history_tab = st.tabs(["Queue", "History"])
 
     with queue_tab:
         if uploaded_files:
             st.subheader("Queued files")
-            st.table(
-                [
-                    {"File": uploaded_file.name, "Size MB": round(uploaded_file.size / 1024 / 1024, 2)}
-                    for uploaded_file in uploaded_files
-                ]
+            st.dataframe(
+                _uploaded_file_rows(uploaded_files),
+                width="stretch",
+                hide_index=True,
             )
         else:
             st.info("Upload one or more media files to create a transcription queue.")

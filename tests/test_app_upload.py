@@ -3,8 +3,17 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 
-from app import _extracted_audio_download, _save_uploaded_media
-from transcripio.models import TranscriptionResult
+import pytest
+
+from app import (
+    _extracted_audio_download,
+    _format_duration_label,
+    _format_file_size,
+    _save_uploaded_media,
+    _speaker_count_label,
+    _uploaded_file_rows,
+)
+from transcripio.models import TranscriptSegment, TranscriptionResult
 
 
 class StreamOnlyUpload(BytesIO):
@@ -58,3 +67,47 @@ def test_extracted_audio_download_is_skipped_for_audio_source(tmp_path: Path) ->
     )
 
     assert _extracted_audio_download(result) is None
+
+
+def test_format_file_size_uses_readable_units() -> None:
+    assert _format_file_size(12) == "12 B"
+    assert _format_file_size(1536) == "1.5 KB"
+    assert _format_file_size(2 * 1024 * 1024) == "2.0 MB"
+
+
+def test_format_file_size_rejects_negative_values() -> None:
+    with pytest.raises(ValueError, match="zero or greater"):
+        _format_file_size(-1)
+
+
+def test_format_duration_label_uses_clock_format() -> None:
+    assert _format_duration_label(None) == "Unknown"
+    assert _format_duration_label(65.2) == "1:05"
+    assert _format_duration_label(3661.0) == "1:01:01"
+
+
+def test_speaker_count_label_counts_distinct_speakers(tmp_path: Path) -> None:
+    result = TranscriptionResult(
+        job_id="job-1",
+        source_name="meeting.mp3",
+        source_path=tmp_path / "meeting.mp3",
+        audio_path=tmp_path / "meeting.prepared.wav",
+        language="en",
+        duration=1.0,
+        created_at="2026-06-23T12:00:00",
+        segments=[
+            TranscriptSegment(start=0.0, end=1.0, speaker="SPEAKER_00", text="Hi"),
+            TranscriptSegment(start=1.0, end=2.0, speaker="SPEAKER_01", text="Hello"),
+            TranscriptSegment(start=2.0, end=3.0, speaker="SPEAKER_00", text="Again"),
+        ],
+    )
+
+    assert _speaker_count_label(result) == "2"
+
+
+def test_uploaded_file_rows_format_sizes() -> None:
+    class UploadedFile:
+        name = "meeting.wav"
+        size = 2048
+
+    assert _uploaded_file_rows([UploadedFile()]) == [{"File": "meeting.wav", "Size": "2.0 KB"}]
