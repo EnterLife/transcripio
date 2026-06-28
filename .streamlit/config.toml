@@ -1,6 +1,9 @@
 [browser]
 gatherUsageStats = false
 
+[client]
+toolbarMode = "viewer"
+
 [server]
 showEmailPrompt = false
 maxUploadSize = 102400

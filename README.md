@@ -1,13 +1,15 @@
 # Transcripio
 
 Transcripio is a local-first Python application for transcribing audio and video files.
-It provides a Streamlit UI, extracts audio with `ffmpeg`, runs speech recognition with
-`faster-whisper`, optionally assigns speakers with a local `pyannote.audio` pipeline,
-and exports editable results as TXT, SRT, VTT, DOCX, and JSON.
+It provides a PySide6 desktop UI and a Streamlit browser UI, extracts audio with
+`ffmpeg`, runs speech recognition with `faster-whisper`, optionally assigns speakers
+with a local `pyannote.audio` pipeline, and exports editable results as TXT, SRT, VTT,
+DOCX, and JSON.
 
 ## Current Features
 
 - Upload one or more audio/video files.
+- Use a standalone PySide6 desktop workspace or the Streamlit browser UI.
 - Process files as a simple queue.
 - Extract a mono 16 kHz WAV file before transcription.
 - Use a `faster-whisper` model by model name or by local CTranslate2 model path.
@@ -36,7 +38,8 @@ transcripio/
   requirements.txt               single dependency list
   settings.json                  default app settings
   scripts/setup.bat              Windows setup script for .venv
-  scripts/run.bat                Windows app launcher
+  scripts/run.bat                Windows Streamlit launcher
+  scripts/run_desktop.bat        Windows desktop launcher
   scripts/install_gpu_runtime.bat optional NVIDIA CUDA runtime installer
   scripts/install_ffmpeg.py       installs ffmpeg into .venv
   scripts/install_cuda_runtime_if_needed.py conditional CUDA runtime installer
@@ -51,6 +54,9 @@ transcripio/
     formatters.py                TXT/SRT/VTT/DOCX/JSON exports
     storage.py                   transcript history persistence
     models.py                    shared dataclasses
+  src/transcripio_desktop/
+    app.py                       PySide6 desktop interface
+    helpers.py                   desktop formatting/config/export helpers
   tests/                         focused unit tests
   data/                          runtime output, ignored by git
   models/                        local model files, ignored by git
@@ -104,7 +110,13 @@ The script does all of this:
 6. Installs NVIDIA CUDA runtime packages only when a CUDA-capable NVIDIA GPU is detected
    and the required CUDA DLLs are missing.
 
-Then launch the app:
+Then launch the desktop app:
+
+```powershell
+.\scripts\run_desktop.bat
+```
+
+Or launch the Streamlit browser UI:
 
 ```powershell
 .\scripts\run.bat
@@ -130,7 +142,13 @@ python -m pip install -e . --no-deps
 python scripts\install_cuda_runtime_if_needed.py
 ```
 
-Run the app:
+Run the desktop app:
+
+```powershell
+.\.venv\Scripts\python.exe -m transcripio_desktop.app
+```
+
+Run the Streamlit app:
 
 ```powershell
 .\.venv\Scripts\python.exe -m streamlit run app.py
@@ -141,7 +159,8 @@ Streamlit automatically.
 
 ## Using the App
 
-1. Open the app with `scripts\run.bat`.
+1. Open the desktop app with `scripts\run_desktop.bat`, or open the Streamlit UI with
+   `scripts\run.bat`.
 2. In the sidebar, choose the Whisper model:
    - Use a model name such as `tiny`, `base`, `small`, `medium`, or `large-v3`.
    - Or use a local CTranslate2 model path such as `models/whisper-large-v3-ct2`.
@@ -171,6 +190,28 @@ Streamlit automatically.
     split/merge operations.
 15. Optionally generate LLM notes from the edited transcript.
 16. Download TXT, SRT, VTT, DOCX, JSON, Words CSV, or generated notes.
+
+## Desktop App
+
+The PySide6 desktop interface is a standalone local window that uses the same
+transcription backend as the Streamlit app. It supports:
+
+- drag-and-drop or file picker queueing;
+- model, device, compute, diarization, ffmpeg, output, and history settings;
+- environment checks before long runs;
+- per-file progress and run log;
+- editable transcript segment table;
+- local history loading;
+- TXT, SRT, VTT, DOCX, JSON, and Words CSV export.
+
+Launch it with:
+
+```powershell
+.\scripts\run_desktop.bat
+```
+
+The desktop app does not upload media or model data anywhere. It still stores prepared
+WAV files under `data/output/` and transcript history under `data/history/`.
 
 ## Supported Input Formats
 
@@ -483,7 +524,7 @@ local model weights and local media.
 Check imports:
 
 ```powershell
-.\.venv\Scripts\python.exe -c "import streamlit, faster_whisper, torchaudio; import transcripio; print('ok')"
+.\.venv\Scripts\python.exe -c "import streamlit, PySide6, faster_whisper, torchaudio; import transcripio, transcripio_desktop; print('ok')"
 ```
 
 Check the local ffmpeg binary:

@@ -14,6 +14,8 @@ if not exist ".venv\Scripts\python.exe" (
 
 echo.
 echo Done. To launch:
+echo scripts\run_desktop.bat
+echo or:
 echo scripts\run.bat
 set "EXIT_CODE=0"
 goto finish
