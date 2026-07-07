@@ -11,6 +11,7 @@ from typing import NoReturn
 import streamlit as st
 
 UPLOAD_COPY_CHUNK_SIZE = 1024 * 1024
+QUEUE_SELECTED_RESULT_KEY = "queue-completed-transcript"
 ROOT_DIR = Path(__file__).resolve().parent
 SRC_DIR = ROOT_DIR / "src"
 if str(SRC_DIR) not in sys.path:
@@ -699,6 +700,14 @@ def _save_result_to_history(result: TranscriptionResult, history_dir: Path) -> b
         st.warning(f"Transcript is available in this session, but history was not saved: {exc}")
         return False
     return True
+
+
+def _completed_result_label(result: TranscriptionResult) -> str:
+    return f"{result.source_name} | {result.created_at[:19]} | {result.job_id[:8]}"
+
+
+def _remember_completed_result_selection(session_state, result: TranscriptionResult) -> None:
+    session_state[QUEUE_SELECTED_RESULT_KEY] = _completed_result_label(result)
 
 
 def _format_file_size(size_bytes: int) -> str:
@@ -1442,6 +1451,7 @@ def main() -> None:
             config = selected_config
             pipeline = TranscriptionPipeline(config)
             overall_progress = st.progress(0, text="Starting queue")
+            latest_result: TranscriptionResult | None = None
 
             for index, uploaded_file in enumerate(uploaded_files, start=1):
                 st.write(f"Processing `{uploaded_file.name}` ({index}/{len(uploaded_files)})")
@@ -1464,20 +1474,21 @@ def main() -> None:
                         continue
 
                 st.session_state.results[result.job_id] = result
+                latest_result = result
                 _save_result_to_history(result, config.history_dir)
                 st.success(f"Finished `{uploaded_file.name}`")
 
+            if latest_result is not None:
+                _remember_completed_result_selection(st.session_state, latest_result)
+
         if st.session_state.results:
             results = list(st.session_state.results.values())
-            result_labels = [
-                f"{result.source_name} | {result.created_at[:19]} | {result.job_id[:8]}"
-                for result in results
-            ]
+            result_labels = [_completed_result_label(result) for result in results]
             selected_result_label = st.selectbox(
                 "Completed transcripts",
                 result_labels,
                 index=len(result_labels) - 1,
-                key="queue-completed-transcript",
+                key=QUEUE_SELECTED_RESULT_KEY,
             )
             selected_result = results[result_labels.index(selected_result_label)]
             _show_result_editor(

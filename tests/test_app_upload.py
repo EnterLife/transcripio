@@ -6,9 +6,12 @@ from pathlib import Path
 import pytest
 
 from app import (
+    QUEUE_SELECTED_RESULT_KEY,
+    _completed_result_label,
     _extracted_audio_download,
     _format_duration_label,
     _format_file_size,
+    _remember_completed_result_selection,
     _save_uploaded_media,
     _save_result_to_history,
     _speaker_count_label,
@@ -113,6 +116,25 @@ def test_uploaded_file_rows_format_sizes() -> None:
         size = 2048
 
     assert _uploaded_file_rows([UploadedFile()]) == [{"File": "meeting.wav", "Size": "2.0 KB"}]
+
+
+def test_completed_result_selection_switches_to_new_result(tmp_path: Path) -> None:
+    session_state = {
+        QUEUE_SELECTED_RESULT_KEY: "old.mp3 | 2026-06-22T10:00 | old-job"
+    }
+    result = TranscriptionResult(
+        job_id="new-job-123456",
+        source_name="new.mp3",
+        source_path=tmp_path / "new.mp3",
+        audio_path=tmp_path / "new.prepared.wav",
+        language="en",
+        duration=1.0,
+        created_at="2026-06-23T12:00:00+00:00",
+    )
+
+    _remember_completed_result_selection(session_state, result)
+
+    assert session_state[QUEUE_SELECTED_RESULT_KEY] == _completed_result_label(result)
 
 
 def test_save_result_to_history_warns_without_losing_session_result(

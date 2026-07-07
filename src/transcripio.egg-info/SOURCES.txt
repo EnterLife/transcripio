@@ -25,10 +25,14 @@ src/transcripio.egg-info/SOURCES.txt
 src/transcripio.egg-info/dependency_links.txt
 src/transcripio.egg-info/requires.txt
 src/transcripio.egg-info/top_level.txt
+src/transcripio_desktop/__init__.py
+src/transcripio_desktop/app.py
+src/transcripio_desktop/helpers.py
 tests/test_app_upload.py
 tests/test_benchmark.py
 tests/test_config.py
 tests/test_cuda_runtime.py
+tests/test_desktop_helpers.py
 tests/test_diarization.py
 tests/test_diarization_setup.py
 tests/test_editor.py
